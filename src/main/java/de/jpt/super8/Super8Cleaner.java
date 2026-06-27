@@ -3,7 +3,7 @@ package de.jpt.super8;
 import org.bytedeco.ffmpeg.global.avutil;
 
 /** Einstiegspunkt: gradle run --args="input.mp4 output" */
-public class Main {
+public class Super8Cleaner {
 
 	public static void main(String[] args) throws Exception {
 		avutil.av_log_set_level(avutil.AV_LOG_ERROR); // FFmpeg-Logging reduzieren
