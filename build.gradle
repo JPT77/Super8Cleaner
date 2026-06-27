@@ -1,0 +1,52 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'eclipse'
+}
+
+group = 'com.super8'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+    mavenCentral()
+}
+
+// Optional: build only for the current platform to keep the dependency download small.
+// Run with:  gradle run -Djavacpp.platform=linux-x86_64   (or windows-x86_64 / macosx-arm64 ...)
+// If left unset, javacv-platform pulls native libraries for ALL platforms.
+def javacppPlatform = System.getProperty('javacpp.platform')
+
+dependencies {
+    // JavaCV bundles OpenCV + FFmpeg native libraries (cross platform).
+    implementation 'org.bytedeco:javacv-platform:1.5.10'
+}
+
+if (javacppPlatform != null) {
+    ext['javacpp.platform'] = javacppPlatform
+}
+
+application {
+    mainClass = 'com.super8.debug.Main'
+}
+
+run {
+    // Pass program arguments through, e.g.:  gradle run --args="input.mp4 output"
+    if (System.getProperty('javacpp.platform') != null) {
+        systemProperty 'org.bytedeco.javacpp.platform', System.getProperty('javacpp.platform')
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+eclipse {
+    project {
+        name = 'super8-debug-java'
+    }
+}
