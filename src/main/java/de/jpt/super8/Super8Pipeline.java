@@ -37,7 +37,7 @@ import static org.bytedeco.opencv.global.opencv_imgproc.*;
 public class Super8Pipeline {
 
     private final Config cfg;
-    private final List<Mat> frames = new ArrayList<>();
+    private final List<Mat> frames = new ArrayList<Mat>();
     private final List<FrameRecord> records = new ArrayList<>();
     private double fps = 24.0;
 
@@ -51,7 +51,7 @@ public class Super8Pipeline {
 
     public void run() throws Exception {
         new File(cfg.scenesDir).mkdirs();
-        loadFrames();
+        fps = loadFrames(cfg.videoPath, frames);
         analyze();
         writeCsv();
         computeSceneGains();
@@ -61,25 +61,30 @@ public class Super8Pipeline {
         frames.forEach(Mat::close);
     }
 
-    // 1) Frames laden
-    private void loadFrames() throws Exception {
-        File f = new File(cfg.videoPath);
+    /**
+     * Converts all frames into a @List of @Mat, which probably is a 2D array (matrix)
+     */
+    private static double loadFrames(String filename, List<Mat> output) throws Exception {
+        File f = new File(filename);
         if (!f.exists()) {
-            throw new IOException("Video nicht gefunden: " + cfg.videoPath);
+            throw new IOException("Video nicht gefunden: " + filename);
         }
-        try (FFmpegFrameGrabber grabber = new FFmpegFrameGrabber(cfg.videoPath);
-             OpenCVFrameConverter.ToMat conv = new OpenCVFrameConverter.ToMat()) {
+        output.clear();
+        double result = 0.0;
+        try (FFmpegFrameGrabber grabber = new FFmpegFrameGrabber(filename);
+            OpenCVFrameConverter.ToMat conv = new OpenCVFrameConverter.ToMat()) {
             grabber.start();
             double r = grabber.getVideoFrameRate();
-            if (r > 0) fps = r;
+            if (r > 0) result = r;
             Frame fr;
             while ((fr = grabber.grabImage()) != null) {
                 Mat m = conv.convert(fr);
-                if (m != null) frames.add(m.clone());
+				if (m != null) output.add(m.clone());
             }
             grabber.stop();
         }
-        System.out.println("Frames: " + frames.size() + " | FPS: " + fps);
+        System.out.println("Frames: " + output.size() + " | FPS: " + result);
+        return result;
     }
 
     // 2) Analyse: Inhaltspruefung -> Crop -> Szenen-ID -> globaler Median-Crop
@@ -93,6 +98,7 @@ public class Super8Pipeline {
         int sceneId = -1;
 
         for (int i = 0; i < frames.size(); i++) {
+        	System.out.println("Frame: "+i);
             Mat frame = frames.get(i);
             Mat gray = ImageOps.toGray(frame);
 
