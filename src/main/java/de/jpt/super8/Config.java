@@ -34,7 +34,7 @@ public final class Config {
         this.outputDir = outputDir;
         this.scenesDir = outputDir + "/scenes";
         this.csvPath = outputDir + "/analysis.csv";
-        this.previewPath = outputDir + "/debug_preview.mkv";
+        this.previewPath = outputDir + "/preview.mkv";
     }
 
     /** Erzeugt Config aus Argumenten, faellt auf Umgebungsvariablen bzw. Defaults zurueck. */
