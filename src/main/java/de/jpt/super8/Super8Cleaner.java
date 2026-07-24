@@ -10,6 +10,7 @@ public class Super8Cleaner {
 		Config cfg = Config.fromArgs(args);
 		System.out.println("Input : " + cfg.videoPath);
 		System.out.println("Output: " + cfg.outputDir);
+		System.out.println("FrameH: " + cfg.verticalFrameHeight + " px (Zielabstand vertikaler Crop)");
 		new Super8Pipeline(cfg).run();
 	}
 
