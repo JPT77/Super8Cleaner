@@ -16,34 +16,19 @@ import javax.swing.Scrollable;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 
-/**
- * Zeigt einen Videoframe an. Zwei Modi:
- *  - ORIGINAL: unskaliert (1:1), bei Bedarf mit Scrollbalken.
- *  - FIT: an das Fenster angepasst (seitenverhaeltnistreu).
- * Umschalten per Doppelklick. Enthaelt keinerlei OpenCV-Bezug.
- */
-public class VideoPanel extends JPanel implements Scrollable {
+public class VideoPanel extends JPanel {
 
     private static final long serialVersionUID = 1L;
 
     private BufferedImage image;
-    private boolean fitToWindow = false;
 
     public VideoPanel() {
         setBackground(Color.BLACK);
-        addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) {
-                    toggleFit();
-                }
-            }
-        });
     }
 
     public void setImage(BufferedImage img) {
         image = img;
-        if (img != null && !fitToWindow) {
+        if (img != null) {
             setPreferredSize(new Dimension(img.getWidth(), img.getHeight()));
         }
         revalidate();
@@ -83,23 +68,6 @@ public class VideoPanel extends JPanel implements Scrollable {
         return mat;
     }
 
-    public boolean isFitToWindow() {
-        return fitToWindow;
-    }
-
-    public void setFitToWindow(boolean fit) {
-        fitToWindow = fit;
-        if (!fit && image != null) {
-            setPreferredSize(new Dimension(image.getWidth(), image.getHeight()));
-        }
-        revalidate();
-        repaint();
-    }
-
-    public void toggleFit() {
-        setFitToWindow(!fitToWindow);
-    }
-
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -110,15 +78,14 @@ public class VideoPanel extends JPanel implements Scrollable {
         g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
                 RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
-        if (!fitToWindow) {
-            g2.drawImage(image, 0, 0, null);   // 1:1, unskaliert
-            return;
-        }
         int pw = getWidth();
         int ph = getHeight();
         int iw = image.getWidth();
         int ih = image.getHeight();
-        double scale = Math.min((double) pw / iw, (double) ph / ih);
+        double scale = Math.min(
+                1.0,
+                Math.min((double)pw / iw,
+                         (double)ph / ih));
         int w = (int) (iw * scale);
         int h = (int) (ih * scale);
         int x = (pw - w) / 2;
@@ -126,30 +93,4 @@ public class VideoPanel extends JPanel implements Scrollable {
         g2.drawImage(image, x, y, w, h, null);
     }
 
-    // --- Scrollable: im FIT-Modus die Viewport-Groesse uebernehmen ---
-
-    @Override
-    public Dimension getPreferredScrollableViewportSize() {
-        return getPreferredSize();
-    }
-
-    @Override
-    public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
-        return 16;
-    }
-
-    @Override
-    public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
-        return 100;
-    }
-
-    @Override
-    public boolean getScrollableTracksViewportWidth() {
-        return fitToWindow;
-    }
-
-    @Override
-    public boolean getScrollableTracksViewportHeight() {
-        return fitToWindow;
-    }
 }

@@ -45,8 +45,6 @@ public class VideoPlayer extends JFrame {
 
     private final VideoPanel originalPanel = new VideoPanel();
     private final VideoPanel processedPanel = new VideoPanel();
-    private final JScrollPane leftScroll = new JScrollPane(originalPanel);
-    private final JScrollPane rightScroll = new JScrollPane(processedPanel);
     private final StatusBar statusBar = new StatusBar();
 
     private final JButton btnOpen = new JButton("Open");
@@ -117,12 +115,12 @@ private void buildGui() {
 
     // ------------------------------------------------ obere Reihe
 
-    root.add(leftScroll, "grow,push");
+    root.add(originalPanel, "grow,push");
 
     verticalProfilePanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Vertical"));
     root.add(verticalProfilePanel, "growy,growx");
 
-    root.add(rightScroll, "grow,push,wrap");
+    root.add(processedPanel, "grow,push,wrap");
 
     // ------------------------------------------------ untere Reihe
 
@@ -284,16 +282,28 @@ private void buildGui() {
         showFrame(0);
     }
 
-    /** Fenstergroesse an die Originalaufloesung des Videos anpassen. */
     private void sizeToVideo(VideoInfo info) {
-        originalPanel.setFitToWindow(false);
-        processedPanel.setFitToWindow(false);
-        Dimension d = new Dimension(info.width, info.height);
-        originalPanel.setPreferredSize(d);
-        processedPanel.setPreferredSize(d);
+
+        Rectangle screen =
+                GraphicsEnvironment.getLocalGraphicsEnvironment()
+                                   .getMaximumWindowBounds();
+
+        // etwas Platz für Toolbar, Statusleiste usw.
+        int maxW = screen.width  - 80;
+        int maxH = screen.height - 180;
+
+        double scale = Math.min(
+                1.0,
+                Math.min((double) maxW / info.width,
+                         (double) maxH / info.height));
+
+        int w = (int)Math.round(info.width  * scale);
+        int h = (int)Math.round(info.height * scale);
+
+        originalPanel.setPreferredSize(new Dimension(w, h));
+        processedPanel.setPreferredSize(new Dimension(w, h));
+
         pack();
-        Rectangle screen = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
-        setSize(Math.min(getWidth(), screen.width), Math.min(getHeight(), screen.height));
         setLocationRelativeTo(null);
     }
 
@@ -307,7 +317,7 @@ private void buildGui() {
             return;
         }
         originalPanel.setImage(controller.getOriginalImage());
-        processedPanel.setImage(controller.getProcessedImage(chkCanny.isSelected()));
+        processedPanel.setImage(controller.getProcessedImage(filterList));
         updatingSlider = true;
         slider.setValue(frame);
         updatingSlider = false;
