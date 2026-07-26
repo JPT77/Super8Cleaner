@@ -4,102 +4,120 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 
 import javax.swing.JPanel;
+import javax.swing.Scrollable;
 
-public class VideoPanel extends JPanel {
+/**
+ * Zeigt einen Videoframe an. Zwei Modi:
+ *  - ORIGINAL: unskaliert (1:1), bei Bedarf mit Scrollbalken.
+ *  - FIT: an das Fenster angepasst (seitenverhaeltnistreu).
+ * Umschalten per Doppelklick. Enthaelt keinerlei OpenCV-Bezug.
+ */
+public class VideoPanel extends JPanel implements Scrollable {
 
-	private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
-	private BufferedImage image;
+    private BufferedImage image;
+    private boolean fitToWindow = false;
 
-	private boolean fitToWindow = false;
+    public VideoPanel() {
+        setBackground(Color.BLACK);
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    toggleFit();
+                }
+            }
+        });
+    }
 
-	public VideoPanel() {
+    public void setImage(BufferedImage img) {
+        image = img;
+        if (img != null && !fitToWindow) {
+            setPreferredSize(new Dimension(img.getWidth(), img.getHeight()));
+        }
+        revalidate();
+        repaint();
+    }
 
-		setBackground(Color.BLACK);
+    public BufferedImage getImage() {
+        return image;
+    }
 
-	}
+    public boolean isFitToWindow() {
+        return fitToWindow;
+    }
 
-	public void setImage(BufferedImage img) {
+    public void setFitToWindow(boolean fit) {
+        fitToWindow = fit;
+        if (!fit && image != null) {
+            setPreferredSize(new Dimension(image.getWidth(), image.getHeight()));
+        }
+        revalidate();
+        repaint();
+    }
 
-		image = img;
+    public void toggleFit() {
+        setFitToWindow(!fitToWindow);
+    }
 
-		if (img != null && !fitToWindow) {
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        if (image == null) {
+            return;
+        }
+        Graphics2D g2 = (Graphics2D) g;
+        g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
-			setPreferredSize(
-					new Dimension(
-							img.getWidth()/2,
-							img.getHeight()/2));
+        if (!fitToWindow) {
+            g2.drawImage(image, 0, 0, null);   // 1:1, unskaliert
+            return;
+        }
+        int pw = getWidth();
+        int ph = getHeight();
+        int iw = image.getWidth();
+        int ih = image.getHeight();
+        double scale = Math.min((double) pw / iw, (double) ph / ih);
+        int w = (int) (iw * scale);
+        int h = (int) (ih * scale);
+        int x = (pw - w) / 2;
+        int y = (ph - h) / 2;
+        g2.drawImage(image, x, y, w, h, null);
+    }
 
-			revalidate();
+    // --- Scrollable: im FIT-Modus die Viewport-Groesse uebernehmen ---
 
-		}
+    @Override
+    public Dimension getPreferredScrollableViewportSize() {
+        return getPreferredSize();
+    }
 
-		repaint();
+    @Override
+    public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
+        return 16;
+    }
 
-	}
+    @Override
+    public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
+        return 100;
+    }
 
-	public BufferedImage getImage() {
+    @Override
+    public boolean getScrollableTracksViewportWidth() {
+        return fitToWindow;
+    }
 
-		return image;
-
-	}
-
-	public void setFitToWindow(boolean fit) {
-
-		fitToWindow = fit;
-
-		repaint();
-
-	}
-
-	public boolean isFitToWindow() {
-
-		return fitToWindow;
-
-	}
-
-	@Override
-	protected void paintComponent(Graphics g) {
-
-		super.paintComponent(g);
-
-		if (image == null)
-			return;
-
-		Graphics2D g2 = (Graphics2D) g;
-
-		g2.setRenderingHint(
-				RenderingHints.KEY_INTERPOLATION,
-				RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-
-		if (!fitToWindow) {
-
-			g2.drawImage(image, 0, 0, null);
-
-			return;
-
-		}
-
-		int pw = getWidth();
-		int ph = getHeight();
-
-		int iw = image.getWidth();
-		int ih = image.getHeight();
-
-		double scale = Math.min(
-				(double) pw / iw,
-				(double) ph / ih);
-
-		int w = (int) (iw * scale);
-		int h = (int) (ih * scale);
-
-		int x = (pw - w) / 2;
-		int y = (ph - h) / 2;
-
-		g2.drawImage(image, x, y, w, h, null);
-	}
+    @Override
+    public boolean getScrollableTracksViewportHeight() {
+        return fitToWindow;
+    }
 }
