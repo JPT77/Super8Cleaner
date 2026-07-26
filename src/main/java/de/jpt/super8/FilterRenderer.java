@@ -7,14 +7,14 @@ import javax.swing.JList;
 import javax.swing.ListCellRenderer;
 
 class FilterRenderer extends JCheckBox
-        implements ListCellRenderer<Filter> {
+        implements ListCellRenderer<AbstractFilter> {
 
     private static final long serialVersionUID = 1L;
 
 	@Override
     public Component getListCellRendererComponent(
-            JList<? extends Filter> list,
-            Filter value,
+            JList<? extends AbstractFilter> list,
+            AbstractFilter value,
             int index,
             boolean selected,
             boolean focus) {

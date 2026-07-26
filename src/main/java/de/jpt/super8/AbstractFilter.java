@@ -1,9 +1,12 @@
 package de.jpt.super8;
-public class Filter {
+
+import org.opencv.core.Mat;
+
+public abstract class AbstractFilter {
 
     private final String name;
 
-    public Filter(String name) {
+    public AbstractFilter(String name) {
         this.name = name;
     }
 
@@ -15,4 +18,7 @@ public class Filter {
     public String toString() {
         return name;
     }
+
+	protected abstract Mat process(Mat result);
+
 }

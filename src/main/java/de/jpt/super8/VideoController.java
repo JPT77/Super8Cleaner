@@ -3,6 +3,8 @@ package de.jpt.super8;
 import java.awt.image.BufferedImage;
 import java.io.File;
 
+import javax.swing.JList;
+
 import org.opencv.core.Mat;
 import org.opencv.videoio.VideoCapture;
 import org.opencv.videoio.Videoio;
@@ -66,18 +68,23 @@ public class VideoController {
         return current == null ? null : ImageUtils.matToBufferedImage(current);
     }
 
-    /** Verarbeitetes Bild des aktuellen Frames (optional Canny-Kantenerkennung). */
-    public BufferedImage getProcessedImage(boolean canny) {
+    public BufferedImage getProcessedImage(JList<AbstractFilter> filterList) {
         if (current == null) {
             return null;
         }
-        if (!canny) {
-            return ImageUtils.matToBufferedImage(current);
+        Mat result = current.clone();
+        for (AbstractFilter filter : filterList.getSelectedValuesList()) {
+            Mat next = filter.process(result);
+            if (result != current) {
+                result.release();
+            }
+            result = next;
         }
-        Mat edges = EdgeFilter.process(current);
-        BufferedImage img = ImageUtils.matToBufferedImage(edges);
-        edges.release();
-        return img;
+        BufferedImage image = ImageUtils.matToBufferedImage(result);
+        if (result != current) {
+            result.release();
+        }
+        return image;
     }
 
     public void close() {

@@ -69,8 +69,8 @@ public class VideoPlayer extends JFrame {
 	private final JButton btnFilterUp = new JButton("↑");
 	private final JButton btnFilterDown = new JButton("↓");
 
-	private final DefaultListModel<Filter> filterModel = new DefaultListModel<>();
-	private final JList<Filter> filterList = new JList<>(filterModel);
+	private final DefaultListModel<AbstractFilter> filterModel = new DefaultListModel<AbstractFilter>();
+	private final JList<AbstractFilter> filterList = new JList<AbstractFilter>(filterModel);
 	private final JScrollPane filterScroll = new JScrollPane(filterList);
 	
     private Timer playTimer;
@@ -191,7 +191,7 @@ private void buildGui() {
                     "Filtername");
 
             if (name != null && !name.isBlank()) {
-                filterModel.addElement(new Filter(name));
+//             TODO   filterModel.addElement(new AbstractFilter(name));
             }
         });
         
@@ -209,7 +209,7 @@ private void buildGui() {
 
             if (i > 0) {
 
-                Filter f = filterModel.remove(i);
+                AbstractFilter f = filterModel.remove(i);
                 filterModel.add(i - 1, f);
                 filterList.setSelectedIndex(i - 1);
             }
@@ -221,7 +221,7 @@ private void buildGui() {
 
             if (i >= 0 && i < filterModel.size() - 1) {
 
-                Filter f = filterModel.remove(i);
+                AbstractFilter f = filterModel.remove(i);
                 filterModel.add(i + 1, f);
                 filterList.setSelectedIndex(i + 1);
             }
