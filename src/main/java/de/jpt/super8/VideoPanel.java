@@ -13,6 +13,9 @@ import java.awt.image.BufferedImage;
 import javax.swing.JPanel;
 import javax.swing.Scrollable;
 
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+
 /**
  * Zeigt einen Videoframe an. Zwei Modi:
  *  - ORIGINAL: unskaliert (1:1), bei Bedarf mit Scrollbalken.
@@ -49,6 +52,35 @@ public class VideoPanel extends JPanel implements Scrollable {
 
     public BufferedImage getImage() {
         return image;
+    }
+
+    public Mat getImageAsMat() {
+        if (image == null)
+            return new Mat();
+
+        BufferedImage img = image;
+
+        // Sicherstellen, dass TYPE_3BYTE_BGR vorliegt
+        if (img.getType() != BufferedImage.TYPE_3BYTE_BGR) {
+            BufferedImage converted = new BufferedImage(
+                    img.getWidth(),
+                    img.getHeight(),
+                    BufferedImage.TYPE_3BYTE_BGR);
+
+            Graphics2D g = converted.createGraphics();
+            g.drawImage(img, 0, 0, null);
+            g.dispose();
+
+            img = converted;
+        }
+
+        byte[] pixels = ((java.awt.image.DataBufferByte)
+                img.getRaster().getDataBuffer()).getData();
+
+        Mat mat = new Mat(img.getHeight(), img.getWidth(), CvType.CV_8UC3);
+        mat.put(0, 0, pixels);
+
+        return mat;
     }
 
     public boolean isFitToWindow() {

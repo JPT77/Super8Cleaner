@@ -11,20 +11,25 @@ import java.io.File;
 
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
+import javax.swing.DefaultListModel;
 import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
+import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
 import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
+import javax.swing.ListSelectionModel;
 import javax.swing.Timer;
 import javax.swing.filechooser.FileNameExtensionFilter;
+
+import org.opencv.core.Mat;
 
 import net.miginfocom.swing.MigLayout;
 
@@ -52,6 +57,22 @@ public class VideoPlayer extends JFrame {
     private final JCheckBox chkCanny = new JCheckBox("Canny", true);
     private final JSlider slider = new JSlider(0, 0, 0);
 
+    private final BrightnessGraphPanel verticalProfilePanel = new BrightnessGraphPanel(BrightnessGraphPanel.Orientation.VERTICAL);
+    private final BrightnessGraphPanel horizontalProfilePanel = new BrightnessGraphPanel(BrightnessGraphPanel.Orientation.HORIZONTAL);
+
+	private final JPanel filterButtonPanel = new JPanel(new MigLayout("fillx,wrap"));
+	private final JPanel filterListPanel = new JPanel(new MigLayout("fill"));
+
+	private final JButton btnAddFilter = new JButton("Add");
+	private final JButton btnDeleteFilter = new JButton("Delete");
+	private final JButton btnConfigFilter = new JButton("Config");
+	private final JButton btnFilterUp = new JButton("↑");
+	private final JButton btnFilterDown = new JButton("↓");
+
+	private final DefaultListModel<Filter> filterModel = new DefaultListModel<>();
+	private final JList<Filter> filterList = new JList<>(filterModel);
+	private final JScrollPane filterScroll = new JScrollPane(filterList);
+	
     private Timer playTimer;
     private boolean updatingSlider = false;
 
@@ -63,37 +84,72 @@ public class VideoPlayer extends JFrame {
         installKeyBindings();
         pack();
         setLocationRelativeTo(null);
+        filterList.setCellRenderer(new FilterRenderer());
+        filterList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
     }
 
     // ------------------------------------------------------------------ GUI
 
-    private void buildGui() {
-        JPanel root = new JPanel(new MigLayout(
-                "fill,insets 5",
-                "[grow][grow]",
-                "[][grow][]10[]"));
+private void buildGui() {
 
-        JToolBar tb = new JToolBar();
-        tb.setFloatable(false);
-        tb.add(btnOpen);
-        tb.addSeparator();
-        tb.add(btnPlay);
-        tb.add(btnStop);
-        tb.addSeparator();
-        tb.add(btnPrev);
-        tb.add(btnNext);
-        tb.addSeparator();
-        tb.add(chkCanny);
-        root.add(tb, "span 2,growx,wrap");
+    JPanel root = new JPanel(new MigLayout(
+            "fill,insets 5",
+            "[grow][90!][grow]",
+            "[][grow][120!][]10[]"));
 
-        root.add(leftScroll, "grow,push");
-        root.add(rightScroll, "grow,push,wrap");
-        root.add(slider, "span 2,growx,wrap");
-        root.add(statusBar, "span 2,growx");
+    // ------------------------------------------------ Toolbar
 
-        setContentPane(root);
-        setPlaybackEnabled(false);
-    }
+    JToolBar tb = new JToolBar();
+    tb.setFloatable(false);
+
+
+    tb.add(btnOpen);
+    tb.addSeparator();
+    tb.add(btnPlay);
+    tb.add(btnStop);
+    tb.addSeparator();
+    tb.add(btnPrev);
+    tb.add(btnNext);
+    tb.addSeparator();
+    tb.add(chkCanny);
+
+    root.add(tb, "span 3,growx,wrap");
+
+    // ------------------------------------------------ obere Reihe
+
+    root.add(leftScroll, "grow,push");
+
+    verticalProfilePanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Vertical"));
+    root.add(verticalProfilePanel, "growy,growx");
+
+    root.add(rightScroll, "grow,push,wrap");
+
+    // ------------------------------------------------ untere Reihe
+
+    horizontalProfilePanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Horizontal"));
+    root.add(horizontalProfilePanel, "growx,growy");
+
+    filterButtonPanel.add(btnAddFilter, "growx");
+    filterButtonPanel.add(btnDeleteFilter, "growx");
+    filterButtonPanel.add(btnConfigFilter, "growx");
+    filterButtonPanel.add(btnFilterUp, "split 2,growx");
+    filterButtonPanel.add(btnFilterDown, "growx");
+
+    root.add(filterButtonPanel, "grow");
+
+    filterListPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Filters"));
+    root.add(filterListPanel, "grow,wrap");
+    filterListPanel.add(filterScroll, "grow,push");
+
+    // ------------------------------------------------ Slider + Status
+
+    root.add(slider, "span 3,growx,wrap");
+    root.add(statusBar, "span 3,growx");
+
+    setContentPane(root);
+    setPlaybackEnabled(false);
+}
+
 
     // --------------------------------------------------------------- Events
 
@@ -127,6 +183,49 @@ public class VideoPlayer extends JFrame {
         };
         originalPanel.addMouseWheelListener(wheel);
         processedPanel.addMouseWheelListener(wheel);
+        
+        btnAddFilter.addActionListener(e -> {
+
+            String name = JOptionPane.showInputDialog(
+                    this,
+                    "Filtername");
+
+            if (name != null && !name.isBlank()) {
+                filterModel.addElement(new Filter(name));
+            }
+        });
+        
+        btnDeleteFilter.addActionListener(e -> {
+
+            int idx = filterList.getSelectedIndex();
+
+            if (idx >= 0)
+                filterModel.remove(idx);
+        });
+        
+        btnFilterUp.addActionListener(e -> {
+
+            int i = filterList.getSelectedIndex();
+
+            if (i > 0) {
+
+                Filter f = filterModel.remove(i);
+                filterModel.add(i - 1, f);
+                filterList.setSelectedIndex(i - 1);
+            }
+        });
+        
+        btnFilterDown.addActionListener(e -> {
+
+            int i = filterList.getSelectedIndex();
+
+            if (i >= 0 && i < filterModel.size() - 1) {
+
+                Filter f = filterModel.remove(i);
+                filterModel.add(i + 1, f);
+                filterList.setSelectedIndex(i + 1);
+            }
+        });
     }
 
     private void installKeyBindings() {
@@ -213,6 +312,10 @@ public class VideoPlayer extends JFrame {
         slider.setValue(frame);
         updatingSlider = false;
         statusBar.update(info);
+
+        Mat mat = originalPanel.getImageAsMat();
+        verticalProfilePanel.setValues(BrightnessProfiles.horizontalProfile(mat));
+        horizontalProfilePanel.setValues(BrightnessProfiles.verticalProfile(mat));
     }
 
     private void refresh() {
