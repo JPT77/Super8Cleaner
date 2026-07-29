@@ -52,7 +52,6 @@ public class VideoPlayer extends JFrame {
     private final JButton btnStop = new JButton("Stop");
     private final JButton btnPrev = new JButton("<");
     private final JButton btnNext = new JButton(">");
-    private final JCheckBox chkCanny = new JCheckBox("Canny", true);
     private final JSlider slider = new JSlider(0, 0, 0);
 
     private final BrightnessGraphPanel verticalProfilePanel = new BrightnessGraphPanel(BrightnessGraphPanel.Orientation.VERTICAL);
@@ -148,7 +147,6 @@ private void buildGui() {
     setPlaybackEnabled(false);
 }
 
-
     // --------------------------------------------------------------- Events
 
     private void installEvents() {
@@ -157,7 +155,6 @@ private void buildGui() {
         btnStop.addActionListener(e -> stop());
         btnPrev.addActionListener(e -> step(-1));
         btnNext.addActionListener(e -> step(1));
-        chkCanny.addActionListener(e -> refresh());
 
         slider.addChangeListener(e -> {
             if (updatingSlider) {
@@ -380,7 +377,6 @@ private void buildGui() {
         btnStop.setEnabled(on);
         btnPrev.setEnabled(on);
         btnNext.setEnabled(on);
-        chkCanny.setEnabled(on);
         slider.setEnabled(on);
     }
 }
