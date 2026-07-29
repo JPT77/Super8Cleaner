@@ -8,8 +8,8 @@ group = 'de.jpt.super8'
 version = '1.0.0'
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 repositories {
@@ -22,16 +22,16 @@ repositories {
 def javacppPlatform = System.getProperty('javacpp.platform')
 
 dependencies {
-    // JavaCV bundles OpenCV + FFmpeg native libraries (cross platform).
-    implementation 'org.bytedeco:javacv-platform:1.5.10'
-}
+	implementation 'org.bytedeco:javacv-platform:1.5.13'
+	// Source: https://mvnrepository.com/artifact/com.miglayout/miglayout
+	implementation 'com.miglayout:miglayout:3.7.4'}
 
 if (javacppPlatform != null) {
     ext['javacpp.platform'] = javacppPlatform
 }
 
 application {
-    mainClass = 'de.jpt.super8.Super8Cleaner'
+    mainClass = 'de.jpt.super8.Main'
 }
 
 run {
