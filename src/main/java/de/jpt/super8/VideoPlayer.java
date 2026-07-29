@@ -69,7 +69,13 @@ public class VideoPlayer extends JFrame {
 	private final DefaultListModel<AbstractFilter> filterModel = new DefaultListModel<AbstractFilter>();
 	private final JList<AbstractFilter> filterList = new JList<AbstractFilter>(filterModel);
 	private final JScrollPane filterScroll = new JScrollPane(filterList);
-	
+
+	private final MigLayout rootLayout = new MigLayout(
+			"fill,insets 5",
+			"[grow][90!][grow]",
+			"[]["+"pref"+"!][grow][]10[]");
+	private JPanel root = new JPanel(rootLayout);
+
     private Timer playTimer;
     private boolean updatingSlider = false;
 
@@ -87,65 +93,82 @@ public class VideoPlayer extends JFrame {
 
     // ------------------------------------------------------------------ GUI
 
-private void buildGui() {
-
-    JPanel root = new JPanel(new MigLayout(
-            "fill,insets 5",
-            "[grow][90!][grow]",
-            "[][grow][120!][]10[]"));
-
+    private void buildGui() {
     // ------------------------------------------------ Toolbar
 
-    JToolBar tb = new JToolBar();
-    tb.setFloatable(false);
+    	JToolBar tb = new JToolBar();
+    	tb.setFloatable(false);
 
 
-    tb.add(btnOpen);
-    tb.addSeparator();
-    tb.add(btnPlay);
-    tb.add(btnStop);
-    tb.addSeparator();
-    tb.add(btnPrev);
-    tb.add(btnNext);
-    tb.addSeparator();
-    tb.add(chkCanny);
+    	tb.add(btnOpen);
+    	tb.addSeparator();
+    	tb.add(btnPlay);
+    	tb.add(btnStop);
+    	tb.addSeparator();
+    	tb.add(btnPrev);
+    	tb.add(btnNext);
+    	tb.addSeparator();
 
-    root.add(tb, "span 3,growx,wrap");
+    	root.add(tb, "span 3,growx,wrap");
 
-    // ------------------------------------------------ obere Reihe
+    	// ------------------------------------------------ obere Reihe
 
-    root.add(originalPanel, "grow,push");
+    	root.add(originalPanel, "shrink");
 
-    verticalProfilePanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Vertical"));
-    root.add(verticalProfilePanel, "growy,growx");
+    	verticalProfilePanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Vertical"));
+    	root.add(verticalProfilePanel, "growy,growx");
 
-    root.add(processedPanel, "grow,push,wrap");
+    	root.add(processedPanel, "grow,push,wrap");
 
-    // ------------------------------------------------ untere Reihe
+    	// ------------------------------------------------ untere Reihe
 
-    horizontalProfilePanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Horizontal"));
-    root.add(horizontalProfilePanel, "growx,growy");
+    	horizontalProfilePanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Horizontal"));
+    	root.add(horizontalProfilePanel, "grow");
 
-    filterButtonPanel.add(btnAddFilter, "growx");
-    filterButtonPanel.add(btnDeleteFilter, "growx");
-    filterButtonPanel.add(btnConfigFilter, "growx");
-    filterButtonPanel.add(btnFilterUp, "split 2,growx");
-    filterButtonPanel.add(btnFilterDown, "growx");
+    	filterButtonPanel.add(btnAddFilter, "growx");
+    	filterButtonPanel.add(btnDeleteFilter, "growx");
+    	filterButtonPanel.add(btnConfigFilter, "growx");
+    	filterButtonPanel.add(btnFilterUp, "split 2,growx");
+    	filterButtonPanel.add(btnFilterDown, "growx");
 
-    root.add(filterButtonPanel, "grow");
+    	root.add(filterButtonPanel, "grow");
 
-    filterListPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Filters"));
-    root.add(filterListPanel, "grow,wrap");
-    filterListPanel.add(filterScroll, "grow,push");
+    	filterListPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Filters"));
+    	root.add(filterListPanel, "grow,wrap");
+    	filterListPanel.add(filterScroll, "grow,push");
 
-    // ------------------------------------------------ Slider + Status
+    	// ------------------------------------------------ Slider + Status
 
-    root.add(slider, "span 3,growx,wrap");
-    root.add(statusBar, "span 3,growx");
+    	root.add(slider, "span 3,growx,wrap");
+    	root.add(statusBar, "span 3,growx");
 
-    setContentPane(root);
-    setPlaybackEnabled(false);
-}
+    	root.addComponentListener(new java.awt.event.ComponentAdapter() {
+    		@Override public void componentResized(java.awt.event.ComponentEvent e) {
+    			updateVideoRowHeight();
+    		}
+    	});
+
+    	setContentPane(root);
+    	setPlaybackEnabled(false);
+    }
+
+    private void updateVideoRowHeight() {
+    	if (!controller.isOpen() || root == null) return;
+    	VideoInfo info = controller.getInfo();
+    	if (info.width <= 0 || info.height <= 0) return;
+
+    	double aspect = (double) info.width / info.height;
+
+    	// verfügbare Breite pro Videopanel:
+    	// Gesamtbreite - insets(2*5) - mittlere Spalte(90) - ca. 3 gaps à 7px
+    	int available = root.getWidth() - 10 - 90 - 21;
+    	if (available <= 0) return;
+    	int videoW = available / 2;
+    	int videoH = (int) Math.round(videoW / aspect);
+
+    	rootLayout.setRowConstraints("["+"]["+videoH+"!][grow][]10[]");
+    	root.revalidate();
+    }
 
     // --------------------------------------------------------------- Events
 
@@ -300,6 +323,7 @@ private void buildGui() {
         originalPanel.setPreferredSize(new Dimension(w, h));
         processedPanel.setPreferredSize(new Dimension(w, h));
 
+        updateVideoRowHeight();
         pack();
         setLocationRelativeTo(null);
     }
