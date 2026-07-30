@@ -7,6 +7,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseWheelListener;
+import java.awt.image.BufferedImage;
 import java.io.File;
 
 import javax.swing.AbstractAction;
@@ -26,6 +27,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
@@ -461,33 +463,205 @@ public class VideoPlayer extends JFrame {
     }
 
     private void findNextScene() {
-        if (!controller.isOpen()) return;
-        VideoInfo info = controller.getInfo();
-        int start = info.currentFrame + 1;
-        double prevMean = brightness(controller.getOriginalImage());
-        for (int f = start; f < info.totalFrames; f++) {
-            if (!controller.seek(f)) break;
-            double mean = brightness(controller.getOriginalImage());
-            if (Math.abs(mean - prevMean) > Config.SCENE_THRESHOLD) {
-                showFrame(f);
-                return;
-            }
-            prevMean = mean;
+
+        if (!controller.isOpen())
+            return;
+
+
+        if (sceneWindow == null ||
+            !sceneWindow.isDisplayable()) {
+
+
+            sceneWindow =
+                    new SceneDetectionWindow(
+                            Config.SCENE_THRESHOLD);
+
+
+            sceneWindow.setSearchAction(
+                    this::startSceneSearch);
+
+
+            sceneWindow.setVisible(true);
+
+        } else {
+
+            sceneWindow.setVisible(true);
+            sceneWindow.toFront();
+            sceneWindow.requestFocus();
         }
-        JOptionPane.showMessageDialog(this, "Keine weitere Szene gefunden.");
     }
 
-    private double brightness(java.awt.image.BufferedImage img) {
-        if (img == null) return 0;
-        long sum = 0; int n = 0;
-        int step = Math.max(1, img.getWidth()/64);
-        for (int y = 0; y < img.getHeight(); y += step)
-            for (int x = 0; x < img.getWidth(); x += step) {
+    private BrightnessInfo analyzeBrightness(BufferedImage img) {
+
+        int width = img.getWidth();
+        int height = img.getHeight();
+
+        long pixels = (long) width * height;
+
+        double sum = 0;
+        double sumSquared = 0;
+
+
+        for (int y = 0; y < height; y++) {
+
+            for (int x = 0; x < width; x++) {
+
                 int rgb = img.getRGB(x, y);
-                sum += ((rgb>>16)&0xff)+((rgb>>8)&0xff)+(rgb&0xff);
-                n++;
+
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+
+
+                // Helligkeit wie vorher:
+                double gray =
+                        (r + g + b) / 3.0;
+
+
+                sum += gray;
+                sumSquared += gray * gray;
             }
-        return n == 0 ? 0 : sum/(3.0*n);
+        }
+
+
+        double mean =
+                sum / pixels;
+
+
+        double variance =
+                (sumSquared / pixels)
+                - (mean * mean);
+
+
+        double stdDev =
+                Math.sqrt(
+                        Math.max(0, variance));
+
+
+        return new BrightnessInfo(
+                mean,
+                stdDev);
     }
 
+    private void startSceneSearch() {
+
+        if (searching)
+            return;
+
+        searching = true;
+
+
+        Thread searchThread = new Thread(() -> {
+
+            VideoInfo info = controller.getInfo();
+
+            int startFrame = info.currentFrame + 1;
+
+
+            BrightnessInfo previous =
+                    analyzeBrightness(
+                            controller.getOriginalImage());
+
+
+            for (int frame = startFrame;
+                 frame < info.totalFrames && searching;
+                 frame++) {
+
+
+                if (!controller.seek(frame))
+                    break;
+
+
+                BrightnessInfo current =
+                        analyzeBrightness(
+                                controller.getOriginalImage());
+
+
+                double difference =
+                        Math.abs(
+                                current.mean -
+                                previous.mean);
+
+
+
+                final int displayFrame = frame;
+                final double displayCurrent =
+                        current.mean;
+                final double displayPrevious =
+                        previous.mean;
+                final double displayStd =
+                        current.stdDev;
+                final double displayDifference =
+                        difference;
+
+
+                SwingUtilities.invokeLater(() -> {
+
+                    if (sceneWindow != null) {
+
+                        sceneWindow.updateValues(
+                                displayFrame,
+                                displayCurrent,
+                                displayPrevious,
+                                displayStd,
+                                displayDifference,
+                                Config.SCENE_THRESHOLD);
+                    }
+                });
+
+
+
+                if (difference >= Config.SCENE_THRESHOLD) {
+
+
+                    final int foundFrame = frame;
+
+
+                    SwingUtilities.invokeLater(() -> {
+
+                        showFrame(foundFrame);
+
+
+                        if (sceneWindow != null) {
+
+                            sceneWindow.setStatus(
+                                    "Szenenwechsel gefunden bei Frame "
+                                    + foundFrame);
+                        }
+
+                    });
+
+
+                    searching = false;
+                    return;
+                }
+
+
+                previous = current;
+
+
+                try {
+
+                    Thread.sleep(5);
+
+                } catch (InterruptedException e) {
+
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+
+
+            searching = false;
+
+
+        });
+
+
+        searchThread.setName(
+                "SceneDetectionThread");
+
+
+        searchThread.start();
+    }
 }
