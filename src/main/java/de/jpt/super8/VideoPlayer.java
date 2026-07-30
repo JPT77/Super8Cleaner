@@ -246,28 +246,58 @@ public class VideoPlayer extends JFrame {
             if (idx >= 0)
                 filterModel.remove(idx);
         });
-        
+
         btnFilterUp.addActionListener(e -> {
-
             int i = filterList.getSelectedIndex();
-
             if (i > 0) {
-
                 AbstractFilter f = filterModel.remove(i);
                 filterModel.add(i - 1, f);
                 filterList.setSelectedIndex(i - 1);
             }
         });
-        
+
         btnFilterDown.addActionListener(e -> {
-
             int i = filterList.getSelectedIndex();
-
             if (i >= 0 && i < filterModel.size() - 1) {
-
                 AbstractFilter f = filterModel.remove(i);
                 filterModel.add(i + 1, f);
                 filterList.setSelectedIndex(i + 1);
+            }
+        });
+
+        btnSceneStart.addActionListener(e -> {
+            if (controller.isOpen())
+                pendingSceneStart = controller.getInfo().currentFrame;
+        });
+
+        btnSceneEnd.addActionListener(e -> {
+            if (controller.isOpen())
+                pendingSceneEnd = controller.getInfo().currentFrame;
+        });
+
+        btnAddScene.addActionListener(e -> {
+            if (pendingSceneStart < 0 || pendingSceneEnd < 0 || pendingSceneEnd < pendingSceneStart) {
+                JOptionPane.showMessageDialog(this,
+                    "Bitte zuerst gültigen Scene Start und Scene End setzen.");
+                return;
+            }
+            String name = JOptionPane.showInputDialog(this,
+                "Szenenname", "Scene " + (sceneModel.size() + 1));
+            if (name == null || name.isBlank()) return;
+            sceneModel.addElement(new Scene(name, pendingSceneStart, pendingSceneEnd));
+            pendingSceneStart = -1;
+            pendingSceneEnd   = -1;
+        });
+
+        btnFindNextScene.addActionListener(e -> findNextScene());
+
+        // Doppelklick auf eine Szene → dorthin springen
+        sceneList.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseClicked(java.awt.event.MouseEvent evt) {
+                if (evt.getClickCount() == 2) {
+                    Scene s = sceneList.getSelectedValue();
+                    if (s != null) showFrame(s.getStart());
+                }
             }
         });
     }
@@ -429,4 +459,35 @@ public class VideoPlayer extends JFrame {
         btnNext.setEnabled(on);
         slider.setEnabled(on);
     }
+
+    private void findNextScene() {
+        if (!controller.isOpen()) return;
+        VideoInfo info = controller.getInfo();
+        int start = info.currentFrame + 1;
+        double prevMean = brightness(controller.getOriginalImage());
+        for (int f = start; f < info.totalFrames; f++) {
+            if (!controller.seek(f)) break;
+            double mean = brightness(controller.getOriginalImage());
+            if (Math.abs(mean - prevMean) > Config.SCENE_THRESHOLD) {
+                showFrame(f);
+                return;
+            }
+            prevMean = mean;
+        }
+        JOptionPane.showMessageDialog(this, "Keine weitere Szene gefunden.");
+    }
+
+    private double brightness(java.awt.image.BufferedImage img) {
+        if (img == null) return 0;
+        long sum = 0; int n = 0;
+        int step = Math.max(1, img.getWidth()/64);
+        for (int y = 0; y < img.getHeight(); y += step)
+            for (int x = 0; x < img.getWidth(); x += step) {
+                int rgb = img.getRGB(x, y);
+                sum += ((rgb>>16)&0xff)+((rgb>>8)&0xff)+(rgb&0xff);
+                n++;
+            }
+        return n == 0 ? 0 : sum/(3.0*n);
+    }
+
 }
