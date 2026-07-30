@@ -14,7 +14,6 @@ import javax.swing.ActionMap;
 import javax.swing.DefaultListModel;
 import javax.swing.InputMap;
 import javax.swing.JButton;
-import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -23,6 +22,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
+import javax.swing.JTabbedPane;
 import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
@@ -58,7 +58,6 @@ public class VideoPlayer extends JFrame {
     private final BrightnessGraphPanel horizontalProfilePanel = new BrightnessGraphPanel(BrightnessGraphPanel.Orientation.HORIZONTAL);
 
 	private final JPanel filterButtonPanel = new JPanel(new MigLayout("fillx,wrap"));
-	private final JPanel filterListPanel = new JPanel(new MigLayout("fill"));
 
 	private final JButton btnAddFilter = new JButton("Add");
 	private final JButton btnDeleteFilter = new JButton("Delete");
@@ -69,6 +68,24 @@ public class VideoPlayer extends JFrame {
 	private final DefaultListModel<AbstractFilter> filterModel = new DefaultListModel<AbstractFilter>();
 	private final JList<AbstractFilter> filterList = new JList<AbstractFilter>(filterModel);
 	private final JScrollPane filterScroll = new JScrollPane(filterList);
+	
+	private final JTabbedPane sideTabs = new JTabbedPane();
+
+	// Szenen-Tab
+	private final DefaultListModel<Scene> sceneModel = new DefaultListModel<Scene>();
+	private final JList<Scene> sceneList = new JList<>(sceneModel);
+	private final JScrollPane sceneScroll = new JScrollPane(sceneList);
+
+	private final JPanel sceneButtonPanel = new JPanel(new MigLayout("fillx,wrap 2","[grow][grow]"));
+
+	private final JButton btnSceneStart    = new JButton("Scene Start");
+	private final JButton btnSceneEnd      = new JButton("Scene End");
+	private final JButton btnAddScene      = new JButton("Add Scene");
+	private final JButton btnFindNextScene = new JButton("Find Next Scene");
+
+	// Zwischenspeicher beim Definieren einer neuen Szene
+	private int pendingSceneStart = -1;
+	private int pendingSceneEnd   = -1;
 
 	private final MigLayout rootLayout = new MigLayout(
 			"fill,insets 5",
@@ -94,12 +111,10 @@ public class VideoPlayer extends JFrame {
     // ------------------------------------------------------------------ GUI
 
     private void buildGui() {
-    // ------------------------------------------------ Toolbar
 
+    	// --- Toolbar
     	JToolBar tb = new JToolBar();
     	tb.setFloatable(false);
-
-
     	tb.add(btnOpen);
     	tb.addSeparator();
     	tb.add(btnPlay);
@@ -108,34 +123,45 @@ public class VideoPlayer extends JFrame {
     	tb.add(btnPrev);
     	tb.add(btnNext);
     	tb.addSeparator();
-
     	root.add(tb, "span 3,growx,wrap");
 
-    	// ------------------------------------------------ obere Reihe
+    	// --- obere Reihe
 
     	root.add(originalPanel, "shrink");
-
     	verticalProfilePanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Vertical"));
     	root.add(verticalProfilePanel, "growy,growx");
-
     	root.add(processedPanel, "grow,push,wrap");
 
-    	// ------------------------------------------------ untere Reihe
-
+    	// --- untere Reihe
     	horizontalProfilePanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Horizontal"));
     	root.add(horizontalProfilePanel, "grow");
 
-    	filterButtonPanel.add(btnAddFilter, "growx");
-    	filterButtonPanel.add(btnDeleteFilter, "growx");
-    	filterButtonPanel.add(btnConfigFilter, "growx");
-    	filterButtonPanel.add(btnFilterUp, "split 2,growx");
-    	filterButtonPanel.add(btnFilterDown, "growx");
+    	// --- Filter-Tab ---
+    	JPanel filterTab = new JPanel(new MigLayout("fill,insets 3", "[fill]3[grow,fill]", "[grow]"));
+//		"fill,insets 3","[grow]","[][grow]"));
+    	filterButtonPanel.add(btnAddFilter,    "growx, wrap");
+    	filterButtonPanel.add(btnDeleteFilter, "growx, wrap");
+    	filterButtonPanel.add(btnConfigFilter, "growx, wrap");
+    	filterButtonPanel.add(btnFilterUp,     "split 2,growx, wrap");
+    	filterButtonPanel.add(btnFilterDown,   "growx");
+    	filterTab.add(filterButtonPanel, "growy");
+    	filterTab.add(filterScroll,      "grow,push");
 
-    	root.add(filterButtonPanel, "grow");
+    	// --- Szenen-Tab ---
+    	JPanel sceneTab = new JPanel(new MigLayout("fill,insets 2", "[fill]2[grow,fill]", "[grow]"));
+    	sceneButtonPanel.add(btnSceneStart,    "growx, wrap");
+    	sceneButtonPanel.add(btnSceneEnd,      "growx, wrap");
+    	sceneButtonPanel.add(btnAddScene,      "growx, wrap");
+    	sceneButtonPanel.add(btnFindNextScene, "growx");
+    	sceneTab.add(sceneButtonPanel, "growy");
+    	sceneTab.add(sceneScroll, "grow, push");
 
-    	filterListPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Filters"));
-    	root.add(filterListPanel, "grow,wrap");
-    	filterListPanel.add(filterScroll, "grow,push");
+    	sideTabs.addTab("Filters", filterTab);
+    	sideTabs.addTab("Scenes",  sceneTab);
+
+    	// im root statt der zwei alten Zellen jetzt nur noch eine Zelle:
+    	root.add(sideTabs, "span 2,grow,wrap");
+//    	root.add(sideTabs, "span 2,grow");
 
     	// ------------------------------------------------ Slider + Status
 
