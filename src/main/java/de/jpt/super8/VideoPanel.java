@@ -44,7 +44,6 @@ public class VideoPanel extends JPanel {
             return new Mat();
 
         BufferedImage img = image;
-
         // Sicherstellen, dass TYPE_3BYTE_BGR vorliegt
         if (img.getType() != BufferedImage.TYPE_3BYTE_BGR) {
             BufferedImage converted = new BufferedImage(
@@ -93,12 +92,11 @@ public class VideoPanel extends JPanel {
         g2.drawImage(image, x, y, w, h, null);
 
         // ----- Debug-Text -----
-
         double panelAspect = (double) pw / ph;
         double imageAspect = (double) iw / ih;
 
         g2.setColor(new Color(0, 0, 0, 180)); // halbtransparenter Hintergrund
-        g2.fillRoundRect(10, 10, 320, 90, 10, 10);
+        g2.fillRoundRect(10, 10, 120, 120, 10, 10);
 
         g2.setColor(Color.WHITE);
         g2.drawString(String.format("Panel: %d x %d", pw, ph), 20, 30);
@@ -106,7 +104,6 @@ public class VideoPanel extends JPanel {
         g2.drawString(String.format("Panel AR: %.3f", panelAspect), 20, 70);
         g2.drawString(String.format("Bild  AR: %.3f", imageAspect), 20, 90);
         g2.drawString(String.format("Scale: %.3f", scale), 20, 110);
-
     }
 
 }
