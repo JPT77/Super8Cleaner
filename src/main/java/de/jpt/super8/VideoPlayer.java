@@ -364,15 +364,16 @@ public class VideoPlayer extends JFrame {
 
         setPlaybackEnabled(true);
         sizeToVideo(info);
-        showFrame(0);
 
-        // Analyse-Fenster oeffnen: iteriert (mehrfach) ueber das gesamte Video
-        // und sammelt pro Frame ein FrameInfo (Lauf 1 = vertikale Randminima).
+        // Overlay des alten Videos leeren, dann Analyse-Fenster fuer neues Video oeffnen
+        originalPanel.setFrameOverlay(null, Double.NaN);
         if (frameAnalysisWindow != null && frameAnalysisWindow.isDisplayable()) {
             frameAnalysisWindow.dispose();
         }
         frameAnalysisWindow = new FrameAnalysisWindow(file, info.totalFrames, info.fps);
         frameAnalysisWindow.setVisible(true);
+
+        showFrame(0);
     }
 
     private void sizeToVideo(VideoInfo info) {
@@ -412,6 +413,15 @@ public class VideoPlayer extends JFrame {
         }
         originalPanel.setImage(controller.getOriginalImage());
         processedPanel.setImage(controller.getProcessedImage(filterList));
+
+        // Analyse-Overlay (falls Lauf 1 fuer diesen Frame bereits vorliegt)
+        if (frameAnalysisWindow != null) {
+            FrameInfo fi = frameAnalysisWindow.getFrameInfo(frame);
+            originalPanel.setFrameOverlay(fi, frameAnalysisWindow.getAvgMinDistance());
+        } else {
+            originalPanel.setFrameOverlay(null, Double.NaN);
+        }
+
         updatingSlider = true;
         slider.setValue(frame);
         updatingSlider = false;
