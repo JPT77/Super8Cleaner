@@ -8,7 +8,8 @@ import java.io.File;
  */
 public final class Config {
 
-    /** Pfad zum Quellvideo (Default: input.mp4). */
+    public static final double SCENE_THRESHOLD = 25;
+	/** Pfad zum Quellvideo (Default: input.mp4). */
     public final String videoPath;
     /** Ausgabeordner. */
     public final String outputDir;
