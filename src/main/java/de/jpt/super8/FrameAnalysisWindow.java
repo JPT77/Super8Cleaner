@@ -372,19 +372,6 @@ public class FrameAnalysisWindow extends JFrame {
         return Double.isNaN(v) ? "--" : String.format("%.1f", v);
     }
 
-    private void runPass1Body() {
-        // Placeholder um Struktur zu erhalten (kein Aufruf).
-    }
-
-    private void runPass1Dummy() {
-        // reserved
-    }
-
-    // Ende runPass1-Erweiterungen
-    private void closeAveragesBlock() {
-        // no-op
-    }
-
     /** Kopiert die aktuellen Batch-Elemente in das Listen-Model (auf dem EDT). */
     private void flushBatch(List<FrameInfo> batch, int processed, int passOffset) {
         final List<FrameInfo> copy = new ArrayList<>(batch);
