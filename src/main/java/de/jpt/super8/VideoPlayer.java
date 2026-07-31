@@ -89,11 +89,17 @@ public class VideoPlayer extends JFrame {
 	private int pendingSceneStart = -1;
 	private int pendingSceneEnd   = -1;
 
+	private SceneDetectionWindow sceneWindow;
+	private volatile boolean searching = false;
+
 	private final MigLayout rootLayout = new MigLayout(
 			"fill,insets 5",
 			"[grow][90!][grow]",
 			"[]["+"pref"+"!][grow][]10[]");
 	private JPanel root = new JPanel(rootLayout);
+
+	/** Analyse-Fenster (wird beim Oeffnen eines neuen Videos erzeugt). */
+	private FrameAnalysisWindow frameAnalysisWindow;
 
     private Timer playTimer;
     private boolean updatingSlider = false;
@@ -355,9 +361,18 @@ public class VideoPlayer extends JFrame {
         slider.setMaximum(Math.max(0, info.totalFrames - 1));
         slider.setValue(0);
         updatingSlider = false;
+
         setPlaybackEnabled(true);
         sizeToVideo(info);
         showFrame(0);
+
+        // Analyse-Fenster oeffnen: iteriert (mehrfach) ueber das gesamte Video
+        // und sammelt pro Frame ein FrameInfo (Lauf 1 = vertikale Randminima).
+        if (frameAnalysisWindow != null && frameAnalysisWindow.isDisplayable()) {
+            frameAnalysisWindow.dispose();
+        }
+        frameAnalysisWindow = new FrameAnalysisWindow(file, info.totalFrames, info.fps);
+        frameAnalysisWindow.setVisible(true);
     }
 
     private void sizeToVideo(VideoInfo info) {
