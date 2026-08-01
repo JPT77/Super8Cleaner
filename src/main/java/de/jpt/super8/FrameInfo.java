@@ -47,6 +47,16 @@ public class FrameInfo {
     /** Staerkstes lokales Minimum im rechten Drittel des UNTEREN Bandes (-1 = nicht gefunden). */
     public int rightBorderDown = -1;
 
+    // ---- Helligkeitsvektoren (fuer Plot-Overlay im VideoPanel) ----
+    /** Full-Frame Zeilenmittel (Lauf 1: fuer Top/Bottom-Minima). */
+    public float[] verticalProfile;
+    /** Zeilenmittel des linken 80-px-Streifens (Lauf 1: fuer Pilotloch). */
+    public float[] holeRowMeans;
+    /** Spaltenmittel des OBEREN Bandes (Lauf 2: fuer leftUp/rightUp). */
+    public float[] upperBandColMeans;
+    /** Spaltenmittel des UNTEREN Bandes (Lauf 2: fuer leftDown/rightDown). */
+    public float[] lowerBandColMeans;
+
     /** Frame wurde als unbrauchbar markiert (siehe {@link #badReason}). */
     public boolean bad = false;
     /** Kurze Begruendung fuer {@link #bad}. */

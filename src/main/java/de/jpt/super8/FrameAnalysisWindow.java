@@ -276,7 +276,7 @@ public class FrameAnalysisWindow extends JFrame {
      */
     private void runPass1() throws Exception {
         try (FFmpegFrameGrabber g = new FFmpegFrameGrabber(videoFile.getAbsolutePath());
-             OpenCVFrameConverter.ToMat conv = new OpenCVFrameConverter.ToMat()) {
+            OpenCVFrameConverter.ToMat conv = new OpenCVFrameConverter.ToMat()) {
             g.start();
 
             final int passOffset = 0; // Lauf 1 -> 0 * totalFrames
@@ -402,6 +402,7 @@ public class FrameAnalysisWindow extends JFrame {
         if (h < 6) { fi.bad = true; fi.badReason = "frame too small"; return; }
 
         double[] prof = ImageOps.verticalProfile(gray);
+        fi.verticalProfile = toFloat(prof);
 
         int topEnd       = h / 3;         // oberes Drittel: [0, topEnd)
         int bottomStart  = h - h / 3;     // unteres Drittel: [bottomStart, h)
@@ -474,6 +475,7 @@ public class FrameAnalysisWindow extends JFrame {
         } finally {
             band.close();
         }
+        fi.holeRowMeans = toFloat(rm);
 
         // Maximum bestimmen
         double max = 0;

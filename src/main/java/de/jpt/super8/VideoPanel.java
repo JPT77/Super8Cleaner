@@ -32,6 +32,14 @@ public class VideoPanel extends JPanel {
     private static final Color COL_BORDER_DN = new Color(240, 200,   0); // gelb  (unteres Band)
     private static final Color COL_BG_LABEL  = new Color(  0,   0,   0, 180);
 
+    // Halbtransparente Farben fuer die Vektor-Plots
+    private static final Color PLOT_VPROFILE  = new Color(255, 200, 120, 180); // hellorange
+    private static final Color PLOT_HOLE      = new Color(255, 150, 220, 180); // hellmagenta
+    private static final Color PLOT_UPPERBAND = new Color(120, 220, 240, 180); // hellcyan
+    private static final Color PLOT_LOWERBAND = new Color(255, 235, 120, 180); // hellgelb
+    /** Maximale Amplitude der Plot-Kurve in Panel-Pixeln. */
+    private static final int   PLOT_AMPLITUDE = 60;
+
     public VideoPanel() {
         setBackground(Color.BLACK);
     }
@@ -141,6 +149,26 @@ public class VideoPanel extends JPanel {
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         Stroke oldStroke = g2.getStroke();
         g2.setStroke(new BasicStroke(1.5f));
+
+        // ----- Helligkeitsvektoren (unter den Detektionslinien) -----
+        // Full-Frame Vertikalprofil (Lauf 1: top/bot) – am RECHTEN Bildrand
+        drawVerticalPlot(g2, fi.verticalProfile, ox + iw, oy, ih, scale,
+                -PLOT_AMPLITUDE, PLOT_VPROFILE); // Amplitude nach LINKS in den Bildbereich hinein
+        // Zeilenmittel linker 80-px-Streifen (Lauf 1: Loch) – am LINKEN Bildrand
+        drawVerticalPlot(g2, fi.holeRowMeans, ox, oy, ih, scale,
+                +PLOT_AMPLITUDE, PLOT_HOLE);
+        // Spaltenmittel oberes Band (Lauf 2)
+        if (fi.upperBandColMeans != null && fi.topMinRow >= 0 && fi.holeTop >= 0) {
+            int bandMidRow = (fi.topMinRow + fi.holeTop) / 2;
+            drawHorizontalPlot(g2, fi.upperBandColMeans, ox, iw, oy, scale,
+                    bandMidRow, PLOT_AMPLITUDE, PLOT_UPPERBAND);
+        }
+        // Spaltenmittel unteres Band (Lauf 2)
+        if (fi.lowerBandColMeans != null && fi.holeBottom >= 0 && fi.bottomMinRow >= 0) {
+            int bandMidRow = (fi.holeBottom + fi.bottomMinRow) / 2;
+            drawHorizontalPlot(g2, fi.lowerBandColMeans, ox, iw, oy, scale,
+                    bandMidRow, PLOT_AMPLITUDE, PLOT_LOWERBAND);
+        }
 
         // Erkannte Grenzen (orange)
         if (fi.topMinRow >= 0) {
@@ -253,6 +281,113 @@ public class VideoPanel extends JPanel {
         g2.fillRoundRect(tx - 3, ty - th, tw + 6, th + 4, 6, 6);
         g2.setColor(color);
         g2.drawString(label, tx, ty);
+    }
+
+    /**
+     * Zeichnet ein vertikales Liniensegment auf Bild-Spalte {@code col} zwischen den
+     * Bild-Zeilen {@code rowFrom} und {@code rowTo} (jeweils inklusive), plus eine
+     * kleine Beschriftung neben der Linie.
+     * {@code labelLeft}: Beschriftung links (true) bzw. rechts (false) der Linie.
+     */
+    private void drawVOverlayLine(Graphics2D g2, int ox, int oy, int iw, int ih,
+                                  double scale, int col, int rowFrom, int rowTo,
+                                  Color color, String label, boolean labelLeft) {
+        int px  = ox + (int) Math.round(col * scale);
+        int py1 = oy + (int) Math.round(Math.min(rowFrom, rowTo) * scale);
+        int py2 = oy + (int) Math.round(Math.max(rowFrom, rowTo) * scale);
+        g2.setColor(color);
+        g2.drawLine(px, py1, px, py2);
+
+        // kleine Endpunkt-Marker, damit Segment auch bei sehr kurzen Baendern sichtbar bleibt
+        g2.drawLine(px - 3, py1, px + 3, py1);
+        g2.drawLine(px - 3, py2, px + 3, py2);
+
+        // Beschriftung mittig auf Segment, seitlich neben der Linie
+        FontMetrics fm = g2.getFontMetrics();
+        int tw  = fm.stringWidth(label);
+        int th  = fm.getAscent();
+        int pad = 4;
+        int ty  = (py1 + py2) / 2 + th / 2;
+        int tx  = labelLeft ? (px - pad - tw) : (px + pad);
+        // Ans Bild-Rechteck clippen
+        if (tx < ox + 2)          tx = px + pad;
+        if (tx + tw > ox + iw - 2) tx = px - pad - tw;
+
+        g2.setColor(COL_BG_LABEL);
+        g2.fillRoundRect(tx - 3, ty - th, tw + 6, th + 4, 6, 6);
+        g2.setColor(color);
+        g2.drawString(label, tx, ty);
+    }
+
+    // ------------------------------------------------ Helligkeits-Vektor-Plots
+
+    /**
+     * Plottet einen zeilenbasierten Helligkeitsvektor als vertikale Polylinie
+     * (y = Zeile, x-Auslenkung = Helligkeit).
+     *
+     * @param baseX      Anker-X-Koordinate im Panel (Nullwert der Auslenkung)
+     * @param oy         Panel-Y-Anker des Bildes
+     * @param ih         Panel-Bildhoehe
+     * @param scale      Skalierungsfaktor (Panel/Bild)
+     * @param amplitude  positive Werte = Kurve nach RECHTS, negative = nach LINKS
+     */
+    private static void drawVerticalPlot(Graphics2D g2, float[] v,
+            int baseX, int oy, int ih, double scale,
+            int amplitude, Color color) {
+        if (v == null || v.length < 2) return;
+        double min = Float.POSITIVE_INFINITY, max = Float.NEGATIVE_INFINITY;
+        for (float f : v) { if (f < min) min = f; if (f > max) max = f; }
+        double range = max - min;
+        if (range < 1e-6) return;
+
+        // Basislinie (dezent) einzeichnen
+        g2.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 60));
+        g2.drawLine(baseX, oy, baseX, oy + ih);
+
+        // Polylinie
+        g2.setColor(color);
+        int n  = v.length;
+        int[] xs = new int[n];
+        int[] ys = new int[n];
+        for (int i = 0; i < n; i++) {
+            double norm = (v[i] - min) / range; // 0..1
+            xs[i] = baseX + (int) Math.round(norm * amplitude);
+            ys[i] = oy + (int) Math.round((i * (double) ih) / n);
+        }
+        g2.drawPolyline(xs, ys, n);
+    }
+
+    /**
+     * Plottet einen spaltenbasierten Helligkeitsvektor als horizontale Polylinie
+     * (x = Spalte, y-Auslenkung = Helligkeit) zentriert um {@code centerRow}.
+     */
+    private static void drawHorizontalPlot(Graphics2D g2, float[] v,
+                                           int ox, int iw, int oy, double scale,
+                                           int centerRow, int amplitude, Color color) {
+        if (v == null || v.length < 2) return;
+        double min = Float.POSITIVE_INFINITY, max = Float.NEGATIVE_INFINITY;
+        for (float f : v) { if (f < min) min = f; if (f > max) max = f; }
+        double range = max - min;
+        if (range < 1e-6) return;
+
+        int baseY = oy + (int) Math.round(centerRow * scale);
+
+        // Basislinie
+        g2.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 60));
+    	g2.drawLine(ox, baseY, ox + iw, baseY);
+
+    	// Polylinie: Kurve zeigt bei hellen Werten NACH OBEN (subtract)
+    	g2.setColor(color);
+    	int n  = v.length;
+    	int[] xs = new int[n];
+    	int[] ys = new int[n];
+    	double halfAmp = amplitude / 2.0;
+    	for (int i = 0; i < n; i++) {
+    		double norm = (v[i] - min) / range; // 0..1
+    		xs[i] = ox + (int) Math.round((i * (double) iw) / n);
+    		ys[i] = baseY - (int) Math.round((norm - 0.5) * 2.0 * halfAmp);
+    	}
+    	g2.drawPolyline(xs, ys, n);
     }
 
     /**
