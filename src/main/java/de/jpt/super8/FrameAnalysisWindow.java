@@ -55,10 +55,10 @@ public class FrameAnalysisWindow extends JFrame {
     public static final int DEFAULT_TARGET_DISTANCE = 920;
 
     /** Breite (Pixel) des linken Streifens, in dem das Pilotloch gesucht wird. */
-    public static final int HOLE_BAND_WIDTH = 80;
+    public static final int HOLE_BAND_WIDTH = 50;
 
     /** Schwellwert fuer die Loch-Detektion (Anteil der maximalen Zeilenhelligkeit). */
-    public static final double HOLE_BRIGHTNESS_FRAC = 0.90;
+    public static final double HOLE_BRIGHTNESS_FRAC = 0.70;
 
     /** Sicherheitsrand (Pixel) fuer die Bandauswahl in Lauf 2. */
     public static final int PASS2_MARGIN = 10;
