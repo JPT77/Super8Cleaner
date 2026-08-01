@@ -60,6 +60,9 @@ public class FrameAnalysisWindow extends JFrame {
     /** Schwellwert fuer die Loch-Detektion (Anteil der maximalen Zeilenhelligkeit). */
     public static final double HOLE_BRIGHTNESS_FRAC = 0.90;
 
+    /** Sicherheitsrand (Pixel) fuer die Bandauswahl in Lauf 2. */
+    public static final int PASS2_MARGIN = 10;
+
     /** Erlaubte Toleranz (Pixel) fuer den Abstand oben/unten. */
     public static final int DIST_TOL_PX = 10;
 
@@ -90,7 +93,7 @@ public class FrameAnalysisWindow extends JFrame {
     // ---- Parameter ----
     private int targetDistance = DEFAULT_TARGET_DISTANCE;
     /** Anzahl geplanter Laeufe. Aktuell nur Lauf 1 implementiert. */
-    private int numPasses = 1;
+    private int numPasses = 2;
 
     /** Mittelwert des Min-Abstands (top-bottom) nach Lauf 1. NaN wenn noch nicht berechnet. */
     private volatile double avgMinDistance = Double.NaN;
@@ -237,9 +240,10 @@ public class FrameAnalysisWindow extends JFrame {
                 });
                 if (pass == 1) {
                     runPass1();
+                } else if (pass == 2) {
+                    runPass2();
                 }
-                // Weitere Laeufe (pass >= 2) folgen spaeter.
-            }
+             }
         } catch (Exception ex) {
             ex.printStackTrace();
             SwingUtilities.invokeLater(() ->
@@ -519,6 +523,159 @@ public class FrameAnalysisWindow extends JFrame {
             if (prof[i] < prof[i - 1] && prof[i] <= prof[i + 1]) out.add(i);
         }
         return out;
+    }
+    // ============================================================== Lauf 2
+
+    /**
+     * Lauf 2: horizontale Randminima (Spalten) in zwei Baendern pro Frame.
+     * <ul>
+     *   <li>Oberes Band: Zeilen [topMinRow + {@link #PASS2_MARGIN}, holeTop - {@link #PASS2_MARGIN})</li>
+     *   <li>Unteres Band: Zeilen [holeBottom + {@link #PASS2_MARGIN}, bottomMinRow - {@link #PASS2_MARGIN})</li>
+     * </ul>
+     * Pro Band wird das Spaltenmittel gebildet und im linken/rechten Drittel
+     * jeweils das staerkste lokale Minimum bestimmt.
+     */
+    private void runPass2() throws Exception {
+        try (FFmpegFrameGrabber g = new FFmpegFrameGrabber(videoFile.getAbsolutePath());
+             OpenCVFrameConverter.ToMat conv = new OpenCVFrameConverter.ToMat()) {
+            g.start();
+
+            final int passOffset = totalFrames; // Lauf 2 -> 1 * totalFrames
+            int idx = 0;
+            Frame fr;
+            while (!cancelled && (fr = g.grabImage()) != null) {
+                Mat bgr = conv.convert(fr);
+                if (bgr == null) { idx++; continue; }
+
+                FrameInfo fi = getFrameInfo(idx);
+                if (fi != null) {
+                    Mat gray = ImageOps.toGray(bgr);
+                    try {
+                        analyzeSecondPass(gray, fi);
+                    } finally {
+                        gray.close();
+                    }
+                }
+
+                final int cur = idx + 1;
+                SwingUtilities.invokeLater(() -> {
+                    barCurrent.setValue(cur);
+                    barTotal.setValue(passOffset + cur);
+                });
+                idx++;
+            }
+            g.stop();
+        }
+        // Repaint der Ergebnisliste (toString der FrameInfos hat sich geaendert)
+        SwingUtilities.invokeLater(resultList::repaint);
+        computeAndShowAveragesPass2();
+    }
+
+    /**
+     * Fuellt in {@code fi} die Felder {@code leftBorderUp/rightBorderUp} sowie
+     * {@code leftBorderDown/rightBorderDown} auf Basis der beiden horizontalen
+     * Baender oberhalb und unterhalb des Pilotlochs.
+     */
+    private void analyzeSecondPass(Mat gray, FrameInfo fi) {
+        if (fi.topMinRow < 0 || fi.bottomMinRow < 0
+                || fi.holeTop < 0 || fi.holeBottom < 0) {
+            return; // Voraussetzungen aus Lauf 1 fehlen
+        }
+        int h = gray.rows();
+        int w = gray.cols();
+        if (w < 6) return;
+
+        int m = PASS2_MARGIN;
+
+        // Oberes Band
+        int upY1 = Math.max(0, fi.topMinRow + m);
+        int upY2 = Math.min(h, fi.holeTop - m);
+        if (upY2 - upY1 >= 2) {
+            Mat band = new Mat(gray, new Rect(0, upY1, w, upY2 - upY1));
+            try {
+                double[] cm = ImageOps.columnMeans(band);
+                fi.upperBandColMeans = toFloat(cm);
+                fi.leftBorderUp  = strongestLocalMinimum(cm, 1, w / 3);
+                fi.rightBorderUp = strongestLocalMinimum(cm, w - w / 3, cm.length - 1);
+            } finally {
+                band.close();
+            }
+        }
+
+        // Unteres Band
+        int dnY1 = Math.max(0, fi.holeBottom + m);
+        int dnY2 = Math.min(h, fi.bottomMinRow - m);
+        if (dnY2 - dnY1 >= 2) {
+            Mat band = new Mat(gray, new Rect(0, dnY1, w, dnY2 - dnY1));
+            try {
+                double[] cm = ImageOps.columnMeans(band);
+                fi.upperBandColMeans = toFloat(cm);
+                fi.leftBorderDown  = strongestLocalMinimum(cm, 1, w / 3);
+                fi.rightBorderDown = strongestLocalMinimum(cm, w - w / 3, cm.length - 1);
+            } finally {
+                band.close();
+            }
+        }
+    }
+
+    /**
+     * Sucht im halboffenen Bereich {@code [from, toExclusive)} das
+     * <b>staerkste</b> (kleinster Wert) strikte lokale Minimum.
+     * Liefert {@code -1}, wenn keins gefunden wurde.
+     */
+    private static int strongestLocalMinimum(double[] a, int from, int toExclusive) {
+        int lo = Math.max(1, from);
+        int hi = Math.min(a.length - 1, toExclusive);
+        int best = -1;
+        double bestVal = Double.POSITIVE_INFINITY;
+        for (int i = lo; i < hi; i++) {
+            if (a[i] < a[i - 1] && a[i] <= a[i + 1] && a[i] < bestVal) {
+                bestVal = a[i];
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    /** Konvertiert double[] in float[] (spart Speicher beim Storen pro Frame). */
+    private static float[] toFloat(double[] a) {
+        if (a == null) return null;
+        float[] r = new float[a.length];
+        for (int i = 0; i < a.length; i++) r[i] = (float) a[i];
+        return r;
+    }
+
+    /** Aggregiert nach Lauf 2: Ø left/right in oberem und unterem Band. */
+    private void computeAndShowAveragesPass2() {
+        long nLU = 0, sLU = 0;
+        long nRU = 0, sRU = 0;
+        long nLD = 0, sLD = 0;
+        long nRD = 0, sRD = 0;
+        for (FrameInfo fi : frameInfos) {
+            if (fi.leftBorderUp    >= 0) { sLU += fi.leftBorderUp;    nLU++; }
+            if (fi.rightBorderUp   >= 0) { sRU += fi.rightBorderUp;   nRU++; }
+            if (fi.leftBorderDown  >= 0) { sLD += fi.leftBorderDown;  nLD++; }
+            if (fi.rightBorderDown >= 0) { sRD += fi.rightBorderDown; nRD++; }
+        }
+        final double aLU = nLU > 0 ? (double) sLU / nLU : Double.NaN;
+        final double aRU = nRU > 0 ? (double) sRU / nRU : Double.NaN;
+        final double aLD = nLD > 0 ? (double) sLD / nLD : Double.NaN;
+        final double aRD = nRD > 0 ? (double) sRD / nRD : Double.NaN;
+
+        System.out.println("=== Lauf 2 Zusammenfassung ===");
+        System.out.printf("  Ø linker  Rand (oben/unten):  %s / %s%n", fmt(aLU), fmt(aLD));
+        System.out.printf("  Ø rechter Rand (oben/unten):  %s / %s%n", fmt(aRU), fmt(aRD));
+
+        SwingUtilities.invokeLater(() -> {
+            String prev = lblResults.getText();
+            String inner = prev.startsWith("<html>") && prev.endsWith("</html>")
+                    ? prev.substring(6, prev.length() - 7)
+                    : prev;
+            lblResults.setText(String.format(
+                    "<html>%s<br/>Pass 2 Ø links (oben/unten): %s / %s "
+                    + "&nbsp;|&nbsp; rechts (oben/unten): %s / %s</html>",
+                    inner, fmt(aLU), fmt(aLD), fmt(aRU), fmt(aRD)));
+        });
     }
 
     // ---------------------------------------------------- Renderer

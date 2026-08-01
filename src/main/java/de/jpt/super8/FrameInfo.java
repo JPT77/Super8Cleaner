@@ -37,6 +37,16 @@ public class FrameInfo {
     /** Vorzeichenbehafteter Abstand bottomMinRow - holeCenter, Integer.MIN_VALUE falls nicht ermittelbar. */
     public int holeToBottomMin = Integer.MIN_VALUE;
 
+    // ---- Lauf 2: horizontale Randminima (Spalten) ----
+    /** Staerkstes lokales Minimum im linken Drittel des OBEREN Bandes (-1 = nicht gefunden). */
+    public int leftBorderUp    = -1;
+    /** Staerkstes lokales Minimum im rechten Drittel des OBEREN Bandes (-1 = nicht gefunden). */
+    public int rightBorderUp   = -1;
+    /** Staerkstes lokales Minimum im linken Drittel des UNTEREN Bandes (-1 = nicht gefunden). */
+    public int leftBorderDown  = -1;
+    /** Staerkstes lokales Minimum im rechten Drittel des UNTEREN Bandes (-1 = nicht gefunden). */
+    public int rightBorderDown = -1;
+
     /** Frame wurde als unbrauchbar markiert (siehe {@link #badReason}). */
     public boolean bad = false;
     /** Kurze Begruendung fuer {@link #bad}. */
@@ -58,22 +68,30 @@ public class FrameInfo {
 
     @Override
     public String toString() {
-    	String hole = (holeCenter < 0)?
-    			"hole=--" : String.format("hole=[%d..%d, c=%d, h=%d]", holeTop, holeBottom, holeCenter, holeHeight);
-    	String rel = "";
-    	if (holeToTopMin != Integer.MIN_VALUE || holeToBottomMin != Integer.MIN_VALUE) {
-    		rel = String.format("  d(hole,top)=%s  d(bot,hole)=%s",
-    				holeToTopMin == Integer.MIN_VALUE ? "--" : Integer.toString(holeToTopMin),
-    						holeToBottomMin == Integer.MIN_VALUE ? "--" : Integer.toString(holeToBottomMin));
-    	}
-    	if (bad) {
-    		return String.format("Frame %6d @ %s   BAD   top=%d bottom=%d dist=%d  %s%s  (%s)",
-    				frameNumber, formattedTime(),
-    				topMinRow, bottomMinRow, distance, hole, rel,
-    				badReason == null ? "" : badReason);
-    	}
-    	return String.format("Frame %6d @ %s   top=%4d  bottom=%4d  dist=%4d  %s%s",
-    			frameNumber, formattedTime(), topMinRow, bottomMinRow, distance, hole, rel);
+        String hole = (holeCenter < 0)?
+                        "hole=--" : String.format("hole=[%d..%d, c=%d, h=%d]", holeTop, holeBottom, holeCenter, holeHeight);
+        String rel = "";
+        if (holeToTopMin != Integer.MIN_VALUE || holeToBottomMin != Integer.MIN_VALUE) {
+                rel = String.format("  d(hole,top)=%s  d(bot,hole)=%s",
+                                holeToTopMin == Integer.MIN_VALUE ? "--" : Integer.toString(holeToTopMin),
+                                                holeToBottomMin == Integer.MIN_VALUE ? "--" : Integer.toString(holeToBottomMin));
+        }
+        String lr = "";
+        if (leftBorderUp >= 0 || rightBorderUp >= 0 || leftBorderDown >= 0 || rightBorderDown >= 0) {
+                lr = String.format("  L/R up=[%s,%s]  L/R dn=[%s,%s]",
+                                leftBorderUp    < 0 ? "--" : Integer.toString(leftBorderUp),
+                                rightBorderUp   < 0 ? "--" : Integer.toString(rightBorderUp),
+                                leftBorderDown  < 0 ? "--" : Integer.toString(leftBorderDown),
+                                rightBorderDown < 0 ? "--" : Integer.toString(rightBorderDown));
+        }
+        if (bad) {
+                return String.format("Frame %6d @ %s   BAD   top=%d bottom=%d dist=%d  %s%s%s  (%s)",
+                                frameNumber, formattedTime(),
+                                topMinRow, bottomMinRow, distance, hole, rel, lr,
+                                badReason == null ? "" : badReason);
+        }
+        return String.format("Frame %6d @ %s   top=%4d  bottom=%4d  dist=%4d  %s%s%s",
+                        frameNumber, formattedTime(), topMinRow, bottomMinRow, distance, hole, rel, lr);
     }
 
 }

@@ -28,6 +28,8 @@ public class VideoPanel extends JPanel {
     private static final Color COL_DETECTED  = new Color(255, 140,   0); // orange
     private static final Color COL_CORRECTED = new Color(  0, 220,  60); // gruen
     private static final Color COL_HOLE      = new Color(220,  60, 220); // magenta
+    private static final Color COL_BORDER_UP = new Color(  0, 200, 220); // cyan  (oberes Band)
+    private static final Color COL_BORDER_DN = new Color(240, 200,   0); // gelb  (unteres Band)
     private static final Color COL_BG_LABEL  = new Color(  0,   0,   0, 180);
 
     public VideoPanel() {
@@ -183,6 +185,34 @@ public class VideoPanel extends JPanel {
                     lbl, false);
         }
 
+
+        // Lauf 2: horizontale Grenzen (nur innerhalb des jeweiligen Bandes zeichnen)
+        // Oberes Band: zwischen topMinRow und holeTop, Farbe CYAN
+        if (fi.topMinRow >= 0 && fi.holeTop >= 0) {
+            if (fi.leftBorderUp >= 0) {
+                drawVOverlayLine(g2, ox, oy, iw, ih, scale,
+                        fi.leftBorderUp, fi.topMinRow, fi.holeTop,
+                        COL_BORDER_UP, "L=" + fi.leftBorderUp, true);
+            }
+            if (fi.rightBorderUp >= 0) {
+                drawVOverlayLine(g2, ox, oy, iw, ih, scale,
+                        fi.rightBorderUp, fi.topMinRow, fi.holeTop,
+                        COL_BORDER_UP, "R=" + fi.rightBorderUp, false);
+            }
+        }
+        // Unteres Band: zwischen holeBottom und bottomMinRow, Farbe GELB
+        if (fi.holeBottom >= 0 && fi.bottomMinRow >= 0) {
+            if (fi.leftBorderDown >= 0) {
+                drawVOverlayLine(g2, ox, oy, iw, ih, scale,
+                        fi.leftBorderDown, fi.holeBottom, fi.bottomMinRow,
+                        COL_BORDER_DN, "L=" + fi.leftBorderDown, true);
+            }
+            if (fi.rightBorderDown >= 0) {
+                drawVOverlayLine(g2, ox, oy, iw, ih, scale,
+                        fi.rightBorderDown, fi.holeBottom, fi.bottomMinRow,
+                        COL_BORDER_DN, "R=" + fi.rightBorderDown, false);
+            }
+        }
         g2.setStroke(oldStroke);
     }
 
