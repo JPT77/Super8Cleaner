@@ -176,13 +176,13 @@ public class VideoPanel extends JPanel {
         // Erkannte Grenzen (orange)
         if (fi.topMinRow >= 0) {
             drawHOverlayLine(g2, ox, oy, iw, ih, scale, fi.topMinRow,
-                    COL_DETECTED, "top=" + fi.topMinRow, true);
+                    COL_DETECTED, "top=" + fi.topMinRow, true, true);
         }
         if (fi.bottomMinRow >= 0) {
             String lbl = "bot=" + fi.bottomMinRow
                        + (fi.distance > 0 ? "  dist=" + fi.distance : "");
             drawHOverlayLine(g2, ox, oy, iw, ih, scale, fi.bottomMinRow,
-                    COL_DETECTED, lbl, false);
+                    COL_DETECTED, lbl, false, true);
         }
 
         // Korrigiert (gruen) wenn Abweichung vom Ziel-Abstand
@@ -197,23 +197,23 @@ public class VideoPanel extends JPanel {
                 int corrTop    = fi.topMinRow    - addTop;    // delta>0 => nach oben ruecken
                 int corrBottom = fi.bottomMinRow + addBottom; // delta>0 => nach unten ruecken
                 drawHOverlayLine(g2, ox, oy, iw, ih, scale, corrTop, COL_CORRECTED,
-                        String.format("corr top=%d (%+d)", corrTop, -addTop), true);
+                        String.format("corr top=%d (%+d)", corrTop, -addTop), true, false);
                 drawHOverlayLine(g2, ox, oy, iw, ih, scale, corrBottom, COL_CORRECTED,
                         String.format("corr bot=%d (%+d)  dist=%d",
-                                corrBottom, addBottom, target), false);
+                                corrBottom, addBottom, target), false, false);
             }
         }
 
         // Pilotloch (magenta)
         if (fi.holeTop >= 0) {
             drawHOverlayLine(g2, ox, oy, iw, ih, scale, fi.holeTop, COL_HOLE,
-                    "holeTop=" + fi.holeTop, true);
+                    "holeTop=" + fi.holeTop, true, false);
         }
         if (fi.holeBottom >= 0) {
             String lbl = "holeBot=" + fi.holeBottom
                        + (fi.holeHeight > 0 ? "  h=" + fi.holeHeight : "");
             drawHOverlayLine(g2, ox, oy, iw, ih, scale, fi.holeBottom, COL_HOLE,
-                    lbl, false);
+                    lbl, false, false);
         }
 
 
@@ -259,25 +259,50 @@ public class VideoPanel extends JPanel {
      */
     private void drawHOverlayLine(Graphics2D g2, int ox, int oy, int iw, int ih,
                                   double scale, int row, Color color,
-                                  String label, boolean labelAbove) {
+                                  String label, boolean labelAbove, boolean leftAligned) {
         int py = oy + (int) Math.round(row * scale);
         // volle Bildbreite
         g2.setColor(color);
         g2.drawLine(ox, py, ox + iw, py);
 
-        // Beschriftung am rechten Bildrand
         FontMetrics fm = g2.getFontMetrics();
         int tw = fm.stringWidth(label);
         int th = fm.getAscent();
         int pad = 4;
-        int tx = ox + iw - tw - 8;
+
+        int tx;
         int ty;
-        if (labelAbove) {
-            ty = py - pad;
-            if (ty - th < oy) ty = py + th + pad;              // wenn oben kein Platz -> unter Linie
+
+        if (leftAligned) {
+            // NEU: Beschriftung am linken Bildrand
+            tx = ox + 8;
+
+            if (labelAbove) {
+                ty = py - pad;
+                if (ty - th < oy) {
+                    ty = py + th + pad;
+                }
+            } else {
+                ty = py + th + pad;
+                if (ty > oy + ih) {
+                    ty = py - pad;
+                }
+            }
         } else {
-            ty = py + th + pad;
-            if (ty > oy + ih) ty = py - pad;                    // wenn unten kein Platz -> ueber Linie
+            // Beschriftung am rechten Bildrand
+            tx = ox + iw - tw - 8;
+
+            if (labelAbove) {
+                ty = py - pad;
+                if (ty - th < oy) {
+                    ty = py + th + pad;   // wenn oben kein Platz -> unter Linie
+                }
+            } else {
+                ty = py + th + pad;
+                if (ty > oy + ih) {
+                    ty = py - pad;        // wenn unten kein Platz -> über Linie
+                }
+            }
         }
         // Hintergrund
         g2.setColor(COL_BG_LABEL);
