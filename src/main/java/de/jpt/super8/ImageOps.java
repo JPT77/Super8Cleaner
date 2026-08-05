@@ -71,7 +71,6 @@ public final class ImageOps {
     public static double[] verticalProfile(Mat gray) {
         Mat prof = new Mat();
         reduce(gray, prof, 1, REDUCE_AVG, CV_32F); // (rows x 1)
-        GaussianBlur(prof, prof, new Size(1, 51), 0);
         int rows = prof.rows();
         double[] out = new double[rows];
         FloatIndexer fi = prof.createIndexer();
