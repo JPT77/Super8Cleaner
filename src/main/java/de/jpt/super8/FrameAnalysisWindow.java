@@ -4,11 +4,17 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout;
+import java.awt.Insets;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
@@ -20,6 +26,9 @@ import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
+import javax.swing.JSpinner;
+import javax.swing.JTabbedPane;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 import javax.swing.border.EmptyBorder;
@@ -63,6 +72,13 @@ public class FrameAnalysisWindow extends JFrame {
     /** Sicherheitsrand (Pixel) fuer die Bandauswahl in Lauf 2. */
     public static final int PASS2_MARGIN = 10;
 
+    /** Erwarteter Abstand oben: Top-Minimum liegt bei {@code holeTop - TOP_OFFSET_FROM_HOLE}. */
+    public static final int TOP_OFFSET_FROM_HOLE = 330;
+    /** Erwarteter Abstand unten: Bottom-Minimum liegt bei {@code holeBottom + BOTTOM_OFFSET_FROM_HOLE}. */
+    public static final int BOTTOM_OFFSET_FROM_HOLE = 340;
+    /** Toleranzfenster (Pixel, +/-) um die erwartete Position. */
+    public static final int OFFSET_TOLERANCE = 50;
+
     /** Erlaubte Toleranz (Pixel) fuer den Abstand oben/unten. */
     public static final int DIST_TOL_PX = 10;
 
@@ -79,9 +95,15 @@ public class FrameAnalysisWindow extends JFrame {
     // ---- UI ----
     private final JProgressBar barCurrent = new JProgressBar();
     private final JProgressBar barTotal   = new JProgressBar();
-    private final JLabel lblPass   = new JLabel(" ");
-    private final JLabel lblStatus = new JLabel(" ");
+    private final JLabel lblPass    = new JLabel(" ");
+    private final JLabel lblStatus  = new JLabel(" ");
     private final JLabel lblResults = new JLabel(" ");
+
+    // Spinner fuer Konstanten-Tab
+    private JSpinner spTargetDistance, spDistanceTolerance, spHoleBandWidth,
+            spPass2BandMargin, spTopOffset, spBottomOffset, spWindowTolerance;
+    private JSpinner spHoleBrightnessFrac; // double
+
     private final JButton btnStart  = new JButton("Start");
     private final JButton btnCancel = new JButton("Abbrechen");
 
@@ -90,9 +112,24 @@ public class FrameAnalysisWindow extends JFrame {
     private volatile boolean cancelled = false;
     private Thread worker;
 
-    // ---- Parameter ----
+    // ---- Parameter (aus Properties ladbar, ueber UI aenderbar) ----
+    /** Ziel-Abstand top-bottom in Pixel. */
     private int targetDistance = DEFAULT_TARGET_DISTANCE;
-    /** Anzahl geplanter Laeufe. Aktuell nur Lauf 1 implementiert. */
+    /** Toleranz fuer den Abstand top-bottom (Pixel). */
+    private int distanceTolerance = DIST_TOL_PX;
+    /** Breite des linken Streifens fuer die Loch-Suche. */
+    private int holeBandWidth = HOLE_BAND_WIDTH;
+    /** Helligkeits-Anteil (0..1) fuer die Loch-Detektion. */
+    private double holeBrightnessFrac = HOLE_BRIGHTNESS_FRAC;
+    /** Sicherheitsrand fuer die Baender in Lauf 2 (Pixel). */
+    private int pass2BandMargin = PASS2_MARGIN;
+    /** Erwarteter Offset des Top-Min vom holeTop (Pixel). */
+    private int topOffsetFromHole = TOP_OFFSET_FROM_HOLE;
+    /** Erwarteter Offset des Bottom-Min vom holeBottom (Pixel). */
+    private int bottomOffsetFromHole = BOTTOM_OFFSET_FROM_HOLE;
+    /** Toleranz-Fenster (Pixel, +/-) fuer die Offset-Suche. */
+    private int windowTolerance = OFFSET_TOLERANCE;
+
     private int numPasses = 2;
 
     /** Mittelwert des Min-Abstands (top-bottom) nach Lauf 1. NaN wenn noch nicht berechnet. */
@@ -110,6 +147,7 @@ public class FrameAnalysisWindow extends JFrame {
         this.fps = fps > 0 ? fps : 24.0;
 
         setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        loadProperties();
         buildGui();
 
         addWindowListener(new java.awt.event.WindowAdapter() {
@@ -125,46 +163,215 @@ public class FrameAnalysisWindow extends JFrame {
         JPanel root = new JPanel(new BorderLayout(8, 8));
         root.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        // Progress-Bereich
-        JPanel top = new JPanel(new GridLayout(5, 1, 4, 4));
-        top.add(lblPass);
+        // ---- Tabs: 1) Statistik  2) Konstanten  3) Log ----
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("Statistik",   buildStatsTab());
+        tabs.addTab("Konstanten",  buildConfigTab());
+        tabs.addTab("Log",         buildLogTab());
+        root.add(tabs, BorderLayout.CENTER);
 
+        // ---- Kontrollbereich UNTEN: links Progressbars, rechts Buttons ----
+        JPanel south = new JPanel(new BorderLayout(10, 4));
+
+        JPanel bars = new JPanel(new GridLayout(3, 1, 2, 2));
         barCurrent.setStringPainted(true);
         barCurrent.setMinimum(0);
         barCurrent.setMaximum(Math.max(1, totalFrames));
-        top.add(labeledBar("Aktueller Lauf:", barCurrent));
-
+        bars.add(lblPass);
+        bars.add(labeledBar("Aktueller Lauf:", barCurrent));
         barTotal.setStringPainted(true);
         barTotal.setMinimum(0);
         barTotal.setMaximum(Math.max(1, totalFrames * numPasses));
-        top.add(labeledBar("Gesamt:", barTotal));
+        bars.add(labeledBar("Gesamt:", barTotal));
+        south.add(bars, BorderLayout.CENTER);
 
-        top.add(lblStatus);
-        top.add(lblResults);
-        root.add(top, BorderLayout.NORTH);
-
-        // Ergebnisliste
-        resultList.setCellRenderer(new FrameInfoRenderer());
-        JScrollPane sp = new JScrollPane(resultList);
-        sp.setPreferredSize(new Dimension(720, 380));
-        sp.setBorder(BorderFactory.createTitledBorder("Frame-Infos"));
-        root.add(sp, BorderLayout.CENTER);
-
-        // Buttons
-        JPanel south = new JPanel();
-        south.add(btnStart);
-        south.add(btnCancel);
+        JPanel btns = new JPanel(new GridLayout(2, 1, 4, 4));
+        btns.add(btnStart);
+        btns.add(btnCancel);
         btnCancel.setEnabled(false);
+        south.add(btns, BorderLayout.EAST);
+
         root.add(south, BorderLayout.SOUTH);
 
         setContentPane(root);
         pack();
         setLocationByPlatform(true);
 
-        btnStart.addActionListener(e -> start());
+        btnStart.addActionListener(e -> {
+            applyConfigFromUi();
+            saveProperties();
+            start();
+        });
         btnCancel.addActionListener(e -> cancel());
 
         updatePassLabel(0);
+    }
+
+    /** Tab 1: Statistik (Ergebnisse aus Lauf 1 / Lauf 2). */
+    private JPanel buildStatsTab() {
+        JPanel p = new JPanel(new BorderLayout(6, 6));
+        p.setBorder(new EmptyBorder(10, 10, 10, 10));
+        lblStatus.setBorder(BorderFactory.createTitledBorder("Status"));
+        lblResults.setBorder(BorderFactory.createTitledBorder("Ergebnisse"));
+        JPanel stack = new JPanel(new GridLayout(2, 1, 6, 6));
+        stack.add(lblStatus);
+        stack.add(lblResults);
+        p.add(stack, BorderLayout.NORTH);
+        return p;
+    }
+
+    /** Tab 2: Konstanten als Spinner (Werte werden per Start uebernommen und gespeichert). */
+    private JPanel buildConfigTab() {
+        JPanel p = new JPanel(new GridBagLayout());
+        p.setBorder(new EmptyBorder(10, 10, 10, 10));
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(4, 6, 4, 6);
+        c.anchor = GridBagConstraints.WEST;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        int row = 0;
+
+        spTargetDistance     = intSpinner(targetDistance,     10, 5000, 1);
+        spDistanceTolerance  = intSpinner(distanceTolerance,   0,  500, 1);
+        spHoleBandWidth      = intSpinner(holeBandWidth,       4, 1000, 1);
+        spHoleBrightnessFrac = new JSpinner(new SpinnerNumberModel(holeBrightnessFrac, 0.10, 1.0, 0.01));
+        spPass2BandMargin    = intSpinner(pass2BandMargin,     0,  500, 1);
+        spTopOffset          = intSpinner(topOffsetFromHole,   0, 5000, 1);
+        spBottomOffset       = intSpinner(bottomOffsetFromHole,0, 5000, 1);
+        spWindowTolerance    = intSpinner(windowTolerance,     0,  500, 1);
+
+        row = addSpinnerRow(p, c, row, "Ziel-Abstand top-bottom (px)", spTargetDistance,
+                "Default: " + DEFAULT_TARGET_DISTANCE);
+        row = addSpinnerRow(p, c, row, "Toleranz Abstand (± px)", spDistanceTolerance,
+                "Default: " + DIST_TOL_PX);
+        row = addSpinnerRow(p, c, row, "Loch-Band Breite (px, links)", spHoleBandWidth,
+                "Default: " + HOLE_BAND_WIDTH);
+        row = addSpinnerRow(p, c, row, "Loch-Helligkeit Anteil (0..1)", spHoleBrightnessFrac,
+                "Default: " + HOLE_BRIGHTNESS_FRAC);
+        row = addSpinnerRow(p, c, row, "Pass 2 Band-Rand (px)", spPass2BandMargin,
+                "Default: " + PASS2_MARGIN);
+        row = addSpinnerRow(p, c, row, "Offset top vom Loch (px)", spTopOffset,
+                "Default: " + TOP_OFFSET_FROM_HOLE);
+        row = addSpinnerRow(p, c, row, "Offset bottom vom Loch (px)", spBottomOffset,
+                "Default: " + BOTTOM_OFFSET_FROM_HOLE);
+        row = addSpinnerRow(p, c, row, "Fenster-Toleranz (± px)", spWindowTolerance,
+                "Default: " + OFFSET_TOLERANCE);
+
+        // Reset-Button
+        JButton btnReset = new JButton("Auf Defaults zuruecksetzen");
+        btnReset.addActionListener(e -> resetSpinnersToDefaults());
+        c.gridx = 0; c.gridy = row; c.gridwidth = 3;
+        p.add(btnReset, c);
+
+        JPanel wrap = new JPanel(new BorderLayout());
+        wrap.add(new JScrollPane(p), BorderLayout.CENTER);
+        JPanel outer = new JPanel(new BorderLayout());
+        outer.add(wrap, BorderLayout.CENTER);
+        return outer;
+    }
+
+    private static JSpinner intSpinner(int val, int min, int max, int step) {
+        return new JSpinner(new SpinnerNumberModel(val, min, max, step));
+    }
+
+    private static int addSpinnerRow(JPanel p, GridBagConstraints c, int row,
+                                     String label, JSpinner sp, String hint) {
+        c.gridwidth = 1;
+        c.gridx = 0; c.gridy = row; c.weightx = 0;
+        p.add(new JLabel(label), c);
+        c.gridx = 1; c.weightx = 0;
+        sp.setPreferredSize(new Dimension(90, sp.getPreferredSize().height));
+        p.add(sp, c);
+        c.gridx = 2; c.weightx = 1;
+        JLabel h = new JLabel(hint);
+        h.setForeground(new Color(120, 120, 120));
+        p.add(h, c);
+        return row + 1;
+    }
+
+    private void resetSpinnersToDefaults() {
+        spTargetDistance    .setValue(DEFAULT_TARGET_DISTANCE);
+        spDistanceTolerance .setValue(DIST_TOL_PX);
+        spHoleBandWidth     .setValue(HOLE_BAND_WIDTH);
+        spHoleBrightnessFrac.setValue(HOLE_BRIGHTNESS_FRAC);
+        spPass2BandMargin   .setValue(PASS2_MARGIN);
+        spTopOffset         .setValue(TOP_OFFSET_FROM_HOLE);
+        spBottomOffset      .setValue(BOTTOM_OFFSET_FROM_HOLE);
+        spWindowTolerance   .setValue(OFFSET_TOLERANCE);
+    }
+
+    private void applyConfigFromUi() {
+        targetDistance      = (Integer) spTargetDistance.getValue();
+        distanceTolerance   = (Integer) spDistanceTolerance.getValue();
+        holeBandWidth       = (Integer) spHoleBandWidth.getValue();
+        holeBrightnessFrac  = ((Number) spHoleBrightnessFrac.getValue()).doubleValue();
+        pass2BandMargin     = (Integer) spPass2BandMargin.getValue();
+        topOffsetFromHole   = (Integer) spTopOffset.getValue();
+        bottomOffsetFromHole= (Integer) spBottomOffset.getValue();
+        windowTolerance     = (Integer) spWindowTolerance.getValue();
+    }
+
+    /** Tab 3: Log (bisherige Frame-Info-Liste). */
+    private JPanel buildLogTab() {
+        JPanel p = new JPanel(new BorderLayout(6, 6));
+        p.setBorder(new EmptyBorder(8, 8, 8, 8));
+        resultList.setCellRenderer(new FrameInfoRenderer());
+        JScrollPane sp = new JScrollPane(resultList);
+        sp.setPreferredSize(new Dimension(760, 420));
+        p.add(sp, BorderLayout.CENTER);
+        return p;
+    }
+
+    // -------------------------------------------------- Properties Persistenz
+
+    private static File propsFile() {
+        return new File(System.getProperty("user.home"), ".super8cleaner-analysis.properties");
+    }
+
+    private void loadProperties() {
+        File f = propsFile();
+        if (!f.isFile()) return;
+        Properties pr = new Properties();
+        try (FileInputStream in = new FileInputStream(f)) {
+            pr.load(in);
+        } catch (Exception ex) {
+            System.err.println("loadProperties: " + ex.getMessage());
+            return;
+        }
+        targetDistance       = getInt(pr, "targetDistance",       targetDistance);
+        distanceTolerance    = getInt(pr, "distanceTolerance",    distanceTolerance);
+        holeBandWidth        = getInt(pr, "holeBandWidth",        holeBandWidth);
+        holeBrightnessFrac   = getDouble(pr, "holeBrightnessFrac",holeBrightnessFrac);
+        pass2BandMargin      = getInt(pr, "pass2BandMargin",      pass2BandMargin);
+        topOffsetFromHole    = getInt(pr, "topOffsetFromHole",    topOffsetFromHole);
+        bottomOffsetFromHole = getInt(pr, "bottomOffsetFromHole", bottomOffsetFromHole);
+        windowTolerance      = getInt(pr, "windowTolerance",      windowTolerance);
+    }
+
+    private void saveProperties() {
+        Properties pr = new Properties();
+        pr.setProperty("targetDistance",       Integer.toString(targetDistance));
+        pr.setProperty("distanceTolerance",    Integer.toString(distanceTolerance));
+        pr.setProperty("holeBandWidth",        Integer.toString(holeBandWidth));
+        pr.setProperty("holeBrightnessFrac",   Double.toString(holeBrightnessFrac));
+        pr.setProperty("pass2BandMargin",      Integer.toString(pass2BandMargin));
+        pr.setProperty("topOffsetFromHole",    Integer.toString(topOffsetFromHole));
+        pr.setProperty("bottomOffsetFromHole", Integer.toString(bottomOffsetFromHole));
+        pr.setProperty("windowTolerance",      Integer.toString(windowTolerance));
+        try (FileOutputStream out = new FileOutputStream(propsFile())) {
+            pr.store(out, "Super8Cleaner - FrameAnalysisWindow config");
+        } catch (Exception ex) {
+            System.err.println("saveProperties: " + ex.getMessage());
+        }
+    }
+
+    private static int getInt(Properties pr, String key, int def) {
+        try { return Integer.parseInt(pr.getProperty(key, Integer.toString(def)).trim()); }
+        catch (Exception e) { return def; }
+    }
+
+    private static double getDouble(Properties pr, String key, double def) {
+        try { return Double.parseDouble(pr.getProperty(key, Double.toString(def)).trim()); }
+        catch (Exception e) { return def; }
     }
 
     private static JPanel labeledBar(String label, JProgressBar bar) {
@@ -401,28 +608,46 @@ public class FrameAnalysisWindow extends JFrame {
         int h = gray.rows();
         if (h < 6) { fi.bad = true; fi.badReason = "frame too small"; return; }
 
+        // 1) Full-Frame Vertikalprofil (fuer Plot und spaeter Minima)
         double[] prof = ImageOps.verticalProfile(gray);
         fi.verticalProfile = toFloat(prof);
 
-        int topEnd       = h / 3;         // oberes Drittel: [0, topEnd)
-        int bottomStart  = h - h / 3;     // unteres Drittel: [bottomStart, h)
+        // 2) Pilotloch ZUERST erkennen - die Suchfenster fuer top/bot haengen davon ab
+        detectPilotHole(gray, fi);
 
-        List<Integer> topMinima    = strictLocalMinima(prof, 1,           topEnd);
-        List<Integer> bottomMinima = strictLocalMinima(prof, bottomStart, prof.length - 1);
+        if (fi.holeTop < 0 || fi.holeBottom < 0) {
+            fi.bad = true;
+            fi.badReason = "no pilot hole -> cannot locate top/bottom";
+            return;
+        }
+
+        // 3) Suchfenster relativ zum Pilotloch:
+        //    top-min erwartet bei holeTop - TOP_OFFSET_FROM_HOLE (+/- OFFSET_TOLERANCE)
+        //    bot-min erwartet bei holeBottom + BOTTOM_OFFSET_FROM_HOLE (+/- OFFSET_TOLERANCE)
+        int topCenter = fi.holeTop    - TOP_OFFSET_FROM_HOLE;
+        int botCenter = fi.holeBottom + BOTTOM_OFFSET_FROM_HOLE;
+        int topFrom = Math.max(1,             topCenter - OFFSET_TOLERANCE);
+        int topTo   = Math.min(prof.length-1, topCenter + OFFSET_TOLERANCE + 1);
+        int botFrom = Math.max(1,             botCenter - OFFSET_TOLERANCE);
+        int botTo   = Math.min(prof.length-1, botCenter + OFFSET_TOLERANCE + 1);
+
+        List<Integer> topMinima    = topFrom < topTo ? strictLocalMinima(prof, topFrom, topTo) : java.util.Collections.emptyList();
+        List<Integer> bottomMinima = botFrom < botTo ? strictLocalMinima(prof, botFrom, botTo) : java.util.Collections.emptyList();
 
         if (topMinima.isEmpty() || bottomMinima.isEmpty()) {
             fi.bad = true;
             if (topMinima.isEmpty() && bottomMinima.isEmpty()) {
-                fi.badReason = "no minima in top/bottom third";
+                fi.badReason = String.format("no minima in windows top[%d..%d] / bot[%d..%d]",
+                        topFrom, topTo, botFrom, botTo);
             } else if (topMinima.isEmpty()) {
-                fi.badReason = "no minimum in top third";
+                fi.badReason = String.format("no minimum in top window [%d..%d]", topFrom, topTo);
             } else {
-                fi.badReason = "no minimum in bottom third";
+                fi.badReason = String.format("no minimum in bottom window [%d..%d]", botFrom, botTo);
             }
             return;
         }
 
-        // Bestes Paar: Abstand am naechsten zu targetDistance
+        // 4) Bestes Paar: Abstand am naechsten zu targetDistance
         int bestTop = topMinima.get(0);
         int bestBottom = bottomMinima.get(0);
         int bestErr = Integer.MAX_VALUE;
@@ -442,14 +667,17 @@ public class FrameAnalysisWindow extends JFrame {
         fi.bottomMinRow = bestBottom;
         fi.distance     = bestBottom - bestTop;
 
+        // Loch-zu-Minima Relationen aktualisieren (holeCenter existiert bereits aus detectPilotHole)
+        if (fi.holeCenter >= 0) {
+            fi.holeToTopMin    = fi.holeCenter - fi.topMinRow;
+            fi.holeToBottomMin = fi.bottomMinRow - fi.holeCenter;
+        }
+
         if (bestErr > DIST_TOL_PX) {
             fi.bad = true;
             fi.badReason = String.format("distance %d out of %d ± %d",
                     fi.distance, targetDistance, DIST_TOL_PX);
         }
-
-        // Pilotloch-Detektion im linken Streifen
-        detectPilotHole(gray, fi);
     }
 
     /**
@@ -512,20 +740,39 @@ public class FrameAnalysisWindow extends JFrame {
         if (fi.bottomMinRow >= 0) fi.holeToBottomMin = fi.bottomMinRow - fi.holeCenter;
     }
 
-    /**
-     * Liefert Indizes strikter lokaler Minima im halboffenen Bereich
-     * {@code [from, toExclusive)}. Definition: {@code prof[i] < prof[i-1] && prof[i] <= prof[i+1]}
-     * – identisch zu {@link ImageOps#verticalCrop(Mat, int)}.
-     */
     private static List<Integer> strictLocalMinima(double[] prof, int from, int toExclusive) {
         List<Integer> out = new ArrayList<>();
-        int lo = Math.max(1, from);
-        int hi = Math.min(prof.length - 1, toExclusive);
-        for (int i = lo; i < hi; i++) {
-            if (prof[i] < prof[i - 1] && prof[i] <= prof[i + 1]) out.add(i);
+
+        int lo = Math.max(0, from);
+        int hi = Math.min(prof.length, toExclusive);
+
+        // Erstes Element
+        if (lo == 0 && hi > 0 && prof.length >= 2) {
+            if (prof[0] <= prof[1]) {
+                out.add(0);
+            }
+            lo = 1;
         }
+
+        // Innere Elemente
+        int innerEnd = Math.min(hi - 1, prof.length - 1);
+        for (int i = lo; i < innerEnd; i++) {
+            if (prof[i] < prof[i - 1] && prof[i] <= prof[i + 1]) {
+                out.add(i);
+            }
+        }
+
+        // Letztes Element
+        if (hi == prof.length && prof.length >= 2) {
+            int last = prof.length - 1;
+            if (last >= lo && prof[last] < prof[last - 1]) {
+                out.add(last);
+            }
+        }
+
         return out;
     }
+
     // ============================================================== Lauf 2
 
     /**
