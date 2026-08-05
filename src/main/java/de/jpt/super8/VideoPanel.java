@@ -1,5 +1,7 @@
 package de.jpt.super8;
 
+import static org.bytedeco.opencv.global.opencv_core.CV_8UC3;
+
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -12,8 +14,8 @@ import java.awt.image.BufferedImage;
 
 import javax.swing.JPanel;
 
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
+import org.bytedeco.javacpp.BytePointer;
+import org.bytedeco.opencv.opencv_core.Mat;
 
 public class VideoPanel extends JPanel {
 
@@ -79,8 +81,9 @@ public class VideoPanel extends JPanel {
         byte[] pixels = ((java.awt.image.DataBufferByte)
                 img.getRaster().getDataBuffer()).getData();
 
-        Mat mat = new Mat(img.getHeight(), img.getWidth(), CvType.CV_8UC3);
-        mat.put(0, 0, pixels);
+        Mat mat = new Mat(img.getHeight(), img.getWidth(), CV_8UC3);
+        BytePointer ptr = mat.data();
+        ptr.put(pixels);
 
         return mat;
     }

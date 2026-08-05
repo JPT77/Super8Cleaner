@@ -31,7 +31,8 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
-import org.opencv.core.Mat;
+import org.bytedeco.javacpp.indexer.UByteIndexer;
+import org.bytedeco.opencv.opencv_core.Mat;
 
 import net.miginfocom.swing.MigLayout;
 
@@ -428,8 +429,14 @@ public class VideoPlayer extends JFrame {
         statusBar.update(info);
 
         Mat mat = originalPanel.getImageAsMat();
-        verticalProfilePanel.setValues(BrightnessProfiles.horizontalProfile(mat));
-        horizontalProfilePanel.setValues(BrightnessProfiles.verticalProfile(mat));
+        UByteIndexer idx = mat.createIndexer();
+        try {
+            verticalProfilePanel.setValues(BrightnessProfiles.horizontalProfile(mat, idx));
+            horizontalProfilePanel.setValues(BrightnessProfiles.verticalProfile(mat, idx));
+        }
+        finally {
+            idx.release();
+        }
     }
 
     private void refresh() {

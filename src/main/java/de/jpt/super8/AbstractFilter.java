@@ -1,6 +1,6 @@
 package de.jpt.super8;
 
-import org.opencv.core.Mat;
+import org.bytedeco.opencv.opencv_core.Mat;
 
 public abstract class AbstractFilter {
 

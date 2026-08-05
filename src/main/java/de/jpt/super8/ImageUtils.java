@@ -1,10 +1,12 @@
 package de.jpt.super8;
 
+import static org.bytedeco.opencv.global.opencv_core.CV_8UC3;
+
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
+import org.bytedeco.javacpp.BytePointer;
+import org.bytedeco.opencv.opencv_core.Mat;
 
 /** Hilfsfunktionen: Mat &harr; BufferedImage sowie Zeitformatierung. */
 public final class ImageUtils {
@@ -22,7 +24,8 @@ public final class ImageUtils {
                 : BufferedImage.TYPE_3BYTE_BGR;
         BufferedImage img = new BufferedImage(mat.cols(), mat.rows(), type);
         byte[] src = new byte[(int) (mat.total() * mat.channels())];
-        mat.get(0, 0, src);
+        BytePointer ptr = mat.data();
+        ptr.get(src);
         byte[] dst = ((DataBufferByte) img.getRaster().getDataBuffer()).getData();
         System.arraycopy(src, 0, dst, 0, src.length);
         return img;
@@ -36,8 +39,9 @@ public final class ImageUtils {
             img.getGraphics().drawImage(bi, 0, 0, null);
         }
         byte[] data = ((DataBufferByte) img.getRaster().getDataBuffer()).getData();
-        Mat mat = new Mat(img.getHeight(), img.getWidth(), CvType.CV_8UC3);
-        mat.put(0, 0, data);
+        Mat mat = new Mat(img.getHeight(), img.getWidth(), CV_8UC3);
+        BytePointer ptr = mat.data();
+        ptr.put(data);
         return mat;
     }
 
