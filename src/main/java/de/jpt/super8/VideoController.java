@@ -5,9 +5,11 @@ import java.io.File;
 
 import javax.swing.JList;
 
-import org.opencv.core.Mat;
-import org.opencv.videoio.VideoCapture;
-import org.opencv.videoio.Videoio;
+import org.bytedeco.javacv.FFmpegFrameGrabber;
+import org.bytedeco.javacv.FFmpegFrameGrabber.Exception;
+import org.bytedeco.javacv.Frame;
+import org.bytedeco.javacv.OpenCVFrameConverter;
+import org.bytedeco.opencv.opencv_core.Mat;
 
 /**
  * Kapselt saemtlichen OpenCV-Zugriff (VideoCapture). Die GUI verwendet niemals
@@ -16,85 +18,149 @@ import org.opencv.videoio.Videoio;
  */
 public class VideoController {
 
-    private VideoCapture capture;
-    private final VideoInfo info = new VideoInfo();
-    private Mat current;   // aktuell gelesener Frame (BGR)
+	private FFmpegFrameGrabber grabber;
+	private final VideoInfo info = new VideoInfo();
+	private final OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
+	private Mat current;
 
-    public VideoInfo getInfo() {
-        return info;
-    }
+	public VideoInfo getInfo() {
+		return info;
+	}
 
-    public boolean isOpen() {
-        return capture != null && capture.isOpened();
-    }
+	public boolean isOpen() {
+		return grabber != null;
+	}
 
-    /** Oeffnet die Videodatei und liest die Metadaten. */
-    public boolean open(File file) {
-        close();
-        capture = new VideoCapture(file.getAbsolutePath());
-        if (!capture.isOpened()) {
-            return false;
-        }
-        info.fileName = file.getName();
-        info.width = (int) capture.get(Videoio.CAP_PROP_FRAME_WIDTH);
-        info.height = (int) capture.get(Videoio.CAP_PROP_FRAME_HEIGHT);
-        info.totalFrames = (int) capture.get(Videoio.CAP_PROP_FRAME_COUNT);
-        info.fps = capture.get(Videoio.CAP_PROP_FPS);
-        info.currentFrame = -1;
-        return true;
-    }
+	/** Oeffnet die Videodatei und liest die Metadaten. */
+	public boolean open(File file) {
 
-    /** Springt framegenau zu {@code frame} und liest ihn. */
-    public boolean seek(int frame) {
-        if (!isOpen()) {
-            return false;
-        }
-        frame = Math.max(0, Math.min(frame, Math.max(0, info.totalFrames - 1)));
-        capture.set(Videoio.CAP_PROP_POS_FRAMES, frame);
-        Mat m = new Mat();
-        if (!capture.read(m)) {
-            return false;
-        }
-        if (current != null) {
-            current.release();
-        }
-        current = m;
-        info.currentFrame = frame;
-        return true;
-    }
+		close();
 
-    /** Originalbild des aktuellen Frames. */
-    public BufferedImage getOriginalImage() {
-        return current == null ? null : ImageUtils.matToBufferedImage(current);
-    }
+		try {
+			System.out.println("Öffne: " + file.getAbsolutePath());
+			grabber = new FFmpegFrameGrabber(file);
+			grabber.start();
 
-    public BufferedImage getProcessedImage(JList<AbstractFilter> filterList) {
-        if (current == null) {
-            return null;
-        }
-        Mat result = current.clone();
-        for (AbstractFilter filter : filterList.getSelectedValuesList()) {
-            Mat next = filter.process(result);
-            if (result != current) {
-                result.release();
-            }
-            result = next;
-        }
-        BufferedImage image = ImageUtils.matToBufferedImage(result);
-        if (result != current) {
-            result.release();
-        }
-        return image;
-    }
+			info.fileName = file.getName();
+			info.width = grabber.getImageWidth();
+			info.height = grabber.getImageHeight();
+			info.totalFrames = grabber.getLengthInFrames();
+			info.fps = grabber.getFrameRate();
+			info.currentFrame = 0;
 
-    public void close() {
-        if (current != null) {
-            current.release();
-            current = null;
-        }
-        if (capture != null) {
-            capture.release();
-            capture = null;
-        }
-    }
+			return nextFrame();
+
+		} catch (Exception e) {
+			e.printStackTrace();
+			close();
+			return false;
+		}
+	}
+
+	/**
+	 * Liest den nächsten Frame (schnell).
+	 */
+	public boolean nextFrame() {
+
+		if (!isOpen())
+			return false;
+
+		try {
+
+			Frame frame = grabber.grabImage();
+
+			if (frame == null)
+				return false;
+
+			if (current != null)
+				current.release();
+
+			current = converter.convert(frame).clone();
+
+			info.currentFrame++;
+
+			return true;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		}
+	}
+
+	/**
+	 * Springt zu einem Frame.
+	 */
+	public boolean seek(int frameNumber) {
+
+		if (!isOpen())
+			return false;
+
+		frameNumber = Math.max(0,
+				Math.min(frameNumber, info.totalFrames - 1));
+
+		try {
+
+			grabber.setVideoFrameNumber(frameNumber);
+
+			Frame frame = grabber.grabImage();
+
+			if (frame == null)
+				return false;
+
+			if (current != null)
+				current.release();
+
+			current = converter.convert(frame).clone();
+
+			info.currentFrame = frameNumber;
+
+			return true;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		}
+	}
+	/** Originalbild des aktuellen Frames. */
+	public BufferedImage getOriginalImage() {
+		return current == null ? null : ImageUtils.matToBufferedImage(current);
+	}
+
+	public BufferedImage getProcessedImage(JList<AbstractFilter> filterList) {
+		if (current == null) {
+			return null;
+		}
+		Mat result = current.clone();
+		for (AbstractFilter filter : filterList.getSelectedValuesList()) {
+			Mat next = filter.process(result);
+			if (result != current) {
+				result.release();
+			}
+			result = next;
+		}
+		BufferedImage image = ImageUtils.matToBufferedImage(result);
+		if (result != current) {
+			result.release();
+		}
+		return image;
+	}
+
+	public void close() {
+
+		if (current != null) {
+			current.release();
+			current = null;
+		}
+
+		if (grabber != null) {
+			try {
+				grabber.stop();
+				grabber.close();
+			} catch (org.bytedeco.javacv.FrameGrabber.Exception e) {
+				e.printStackTrace();
+			}
+			grabber = null;
+		}
+	}
+
 }

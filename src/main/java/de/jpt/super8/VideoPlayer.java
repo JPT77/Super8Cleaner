@@ -599,8 +599,7 @@ public class VideoPlayer extends JFrame {
                  frame < info.totalFrames && searching;
                  frame++) {
 
-
-                if (!controller.seek(frame))
+                if (!controller.nextFrame())
                     break;
 
 
