@@ -549,26 +549,21 @@ public class VideoPlayer extends JFrame {
                 double gray =
                         (r + g + b) / 3.0;
 
-
                 sum += gray;
                 sumSquared += gray * gray;
             }
         }
 
-
         double mean =
                 sum / pixels;
-
 
         double variance =
                 (sumSquared / pixels)
                 - (mean * mean);
 
-
         double stdDev =
                 Math.sqrt(
                         Math.max(0, variance));
-
 
         return new BrightnessInfo(
                 mean,
@@ -582,18 +577,15 @@ public class VideoPlayer extends JFrame {
 
         searching = true;
 
-
         Thread searchThread = new Thread(() -> {
 
             VideoInfo info = controller.getInfo();
 
             int startFrame = info.currentFrame + 1;
 
-
             BrightnessInfo previous =
                     analyzeBrightness(
                             controller.getOriginalImage());
-
 
             for (int frame = startFrame;
                  frame < info.totalFrames && searching;
@@ -602,18 +594,14 @@ public class VideoPlayer extends JFrame {
                 if (!controller.nextFrame())
                     break;
 
-
                 BrightnessInfo current =
                         analyzeBrightness(
                                 controller.getOriginalImage());
-
 
                 double difference =
                         Math.abs(
                                 current.mean -
                                 previous.mean);
-
-
 
                 final int displayFrame = frame;
                 final double displayCurrent =
@@ -624,7 +612,6 @@ public class VideoPlayer extends JFrame {
                         current.stdDev;
                 final double displayDifference =
                         difference;
-
 
                 SwingUtilities.invokeLater(() -> {
 
@@ -640,59 +627,36 @@ public class VideoPlayer extends JFrame {
                     }
                 });
 
-
-
                 if (difference >= Config.SCENE_THRESHOLD) {
-
 
                     final int foundFrame = frame;
 
-
                     SwingUtilities.invokeLater(() -> {
-
                         showFrame(foundFrame);
 
-
                         if (sceneWindow != null) {
-
                             sceneWindow.setStatus(
                                     "Szenenwechsel gefunden bei Frame "
                                     + foundFrame);
                         }
 
                     });
-
-
                     searching = false;
                     return;
                 }
-
-
                 previous = current;
-
-
                 try {
-
                     Thread.sleep(5);
-
                 } catch (InterruptedException e) {
-
                     Thread.currentThread().interrupt();
                     break;
                 }
             }
-
-
             searching = false;
-
-
         });
-
-
         searchThread.setName(
                 "SceneDetectionThread");
-
-
         searchThread.start();
     }
+
 }
